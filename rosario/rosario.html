@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rosario de Hoy</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        h1, h2, h3 {
+            color: #0066cc;
+            text-align: center;
+        }
+        .misterio {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .oracion {
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #f0f4ff;
+            border-left: 3px solid #0066cc;
+            border-radius: 4px;
+        }
+        .destacado {
+            font-weight: bold;
+            color: #0066cc;
+        }
+        .fecha {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+            color: #666;
+        }
+        .instrucciones {
+            background-color: #fffbea;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 3px solid #ffc107;
+        }
+        .pre-misterios {
+            background-color: #e8f5e9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 3px solid #2e7d32;
+        }
+    </style>
+</head>
+<body>
+    <h1>Rosario de Hoy</h1>
+    <div class="fecha" id="fechaActual"></div>
+    
+    <div id="misteriosDelDia"></div>
+    
+    <div id="preMisterios"></div>
+    
+    <div id="contenidoMisterios"></div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Obtener la fecha actual
+            const hoy = new Date();
+            const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            
+            const diaSemana = diasSemana[hoy.getDay()];
+            const fechaCompleta = `${diaSemana}, ${hoy.getDate()} de ${meses[hoy.getMonth()]} de ${hoy.getFullYear()}`;
+            
+            document.getElementById('fechaActual').textContent = fechaCompleta;
+            
+            // Determinar qué misterios corresponden al día
+            let tipoMisterio;
+            let misterios;
+            
+            switch(hoy.getDay()) {
+                case 1: // Lunes
+                case 6: // Sábado
+                    tipoMisterio = "Gozosos";
+                    misterios = [
+                        "La Encarnación del Hijo de Dios",
+                        "La Visitación de Nuestra Señora a su prima santa Isabel",
+                        "El Nacimiento del Hijo de Dios",
+                        "La Presentación de Jesús en el templo",
+                        "El Niño Jesús perdido y hallado en el templo"
+                    ];
+                    break;
+                case 2: // Martes
+                case 5: // Viernes
+                    tipoMisterio = "Dolorosos";
+                    misterios = [
+                        "La Oración de Jesús en el huerto",
+                        "La Flagelación del Señor",
+                        "La Coronación de espinas",
+                        "Jesús con la Cruz a cuestas, camino del Calvario",
+                        "La Crucifixión y Muerte de nuestro Señor"
+                    ];
+                    break;
+                case 3: // Miércoles
+                case 0: // Domingo
+                    tipoMisterio = "Gloriosos";
+                    misterios = [
+                        "La Resurrección del Hijo de Dios",
+                        "La Ascensión del Señor a los Cielos",
+                        "La Venida del Espíritu Santo sobre los Apóstoles",
+                        "La Asunción de nuestra Señora a los Cielos",
+                        "La Coronación de la Santísima Virgen como Reina de Cielos y Tierra"
+                    ];
+                    break;
+                case 4: // Jueves
+                    tipoMisterio = "Luminosos";
+                    misterios = [
+                        "El Bautismo de Jesús en el Jordán",
+                        "La autorrevelación de Jesús en las bodas de Caná",
+                        "El anuncio del Reino de Dios invitando a la conversión",
+                        "La Transfiguración",
+                        "La Institución de la Eucaristía"
+                    ];
+                    break;
+            }
+            
+            // Mostrar qué misterios se rezan hoy
+            document.getElementById('misteriosDelDia').innerHTML = `
+                <div class="instrucciones">
+                    <h2>Hoy se rezan los Misterios ${tipoMisterio}</h2>
+                    <p>Corresponden al día ${diaSemana}</p>
+                </div>
+            `;
+            
+            // Añadir oraciones iniciales antes de los misterios
+            document.getElementById('preMisterios').innerHTML = `
+                <div class="pre-misterios">
+                    <h3>Oraciones Iniciales</h3>
+                    
+                    <div class="oracion">
+                        <p class="destacado">Credo</p>
+                        <p>Creo en Dios, Padre todopoderoso, Creador del cielo y de la tierra. 
+                        Creo en Jesucristo, su único Hijo, nuestro Señor, que fue concebido por obra y gracia del Espíritu Santo, 
+                        nació de Santa María Virgen, padeció bajo el poder de Poncio Pilato, fue crucificado, muerto y sepultado, 
+                        descendió a los infiernos, al tercer día resucitó de entre los muertos, subió a los cielos 
+                        y está sentado a la derecha de Dios, Padre todopoderoso. Desde allí ha de venir a juzgar a vivos y muertos. 
+                        Creo en el Espíritu Santo, la santa Iglesia católica, la comunión de los santos, el perdón de los pecados, 
+                        la resurrección de la carne y la vida eterna. Amén.</p>
+                    </div>
+                    
+                    <div class="oracion">
+                        <p class="destacado">Padrenuestro</p>
+                        <p>Padre nuestro, que estás en el cielo, santificado sea tu Nombre; venga a nosotros tu reino; hágase tu voluntad en la tierra como en el cielo. Danos hoy nuestro pan de cada día; perdona nuestras ofensas como también nosotros perdonamos a los que nos ofenden; no nos dejes caer en la tentación y líbranos del mal. Amén.</p>
+                    </div>
+                    
+                    <div class="oracion">
+                        <p class="destacado">Tres Avemarías</p>
+                        <p>1ª Avemaría<br>
+                        Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús. Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                        
+                        <p>2ª Avemaría<br>
+                        Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús. Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                        
+                        <p>3ª Avemaría<br>
+                        Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús. Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                    </div>
+                    
+                    <div class="oracion">
+                        <p class="destacado">Gloria</p>
+                        <p>Gloria al Padre y al Hijo y al Espíritu Santo. Como era en el principio, ahora y siempre, por los siglos de los siglos. Amén.</p>
+                    </div>
+                </div>
+            `;
+            
+            // Generar el contenido HTML para los 5 misterios
+            let contenidoHTML = '';
+            
+            for (let i = 0; i < misterios.length; i++) {
+                contenidoHTML += `
+                    <div class="misterio">
+                        <h3>Misterio ${i+1}: ${misterios[i]}</h3>
+                        
+                        <div class="oracion">
+                            <p class="destacado">Padrenuestro</p>
+                            <p>Padre nuestro, que estás en el cielo, santificado sea tu Nombre; venga a nosotros tu reino; hágase tu voluntad en la tierra como en el cielo.Danos hoy nuestro pan de cada día; perdona nuestras ofensas como también nosotros perdonamos a los que nos ofenden; no nos dejes caer en la tentación y líbranos del mal. Amén.</p>
+                        </div>
+                        
+                        <div class="oracion">
+                            <p class="destacado">Avemarías</p>
+                            
+                            <p>1ª Avemaría<br>
+                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                            
+                            <p>2ª Avemaría<br>
+                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                            
+                            <p>3ª Avemaría<br>
+                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                            
+                            <p>4ª Avemaría<br>
+                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                            
+                            <p>5ª Avemaría<br>
+                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                            
+                            <p>6ª Avemaría<br>
+                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                            
+                            <p>7ª Avemaría<br>
+                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                            
+                            <p>8ª Avemaría<br>
+                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                            
+                            <p>9ª Avemaría<br>
+                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                            
+                            <p>10ª Avemaría<br>
+                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                        </div>
+                        
+                        <div class="oracion">
+                            <p class="destacado">Gloria</p>
+                            <p>Gloria al Padre y al Hijo y al Espíritu Santo.Como era en el principio, ahora y siempre, por los siglos de los siglos. Amén.</p>
+                        </div>
+                        
+                        <div class="oracion">
+                            <p class="destacado">María, Madre de gracia</p>
+                            <p>María, Madre de gracia, Madre de misericordia. Defiéndenos de nuestros enemigos y ampáranos ahora y en la hora de nuestra muerte. Amén.</p>
+                        </div>
+                        
+                        <div class="oracion">
+                            <p class="destacado">Oh, Jesús Mío</p>
+                            <p>Oh Jesús mío, perdónanos. Líbranos del fuego del infierno, lleva a todas las almas al cielo, especialmente a las más necesitadas.</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('contenidoMisterios').innerHTML = contenidoHTML;
+            
+            // Añadir letanías al final del rosario
+            document.getElementById('contenidoMisterios').innerHTML += `
+                <h2>Letanías de la Santísima Virgen</h2>
+                <div class="oracion">
+                    <p>Señor, ten piedad<br>
+                    Cristo, ten piedad<br>
+                    Señor, ten piedad<br>
+                    Cristo, óyenos<br>
+                    Cristo, escúchanos</p>
+                    
+                    <p>Dios, Padre celestial, ten piedad de nosotros<br>
+                    Dios, Hijo, Redentor del mundo, ten piedad de nosotros<br>
+                    Dios, Espíritu Santo, ten piedad de nosotros<br>
+                    Santísima Trinidad, un solo Dios, ten piedad de nosotros</p>
+                    
+                    <p>Santa María, ruega por nosotros<br>
+                    Santa Madre de Dios, ruega por nosotros<br>
+                    Santa Virgen de las Vírgenes, ruega por nosotros<br>
+                    Madre de Cristo, ruega por nosotros<br>
+                    Madre de la Iglesia, ruega por nosotros<br>
+                    Madre de la misericordia, ruega por nosotros<br>
+                    Madre de la divina gracia, ruega por nosotros<br>
+                    Madre de la esperanza, ruega por nosotros<br>
+                    Madre purísima, ruega por nosotros<br>
+                    Madre castísima, ruega por nosotros<br>
+                    Madre siempre virgen, ruega por nosotros<br>
+                    Madre inmaculada, ruega por nosotros<br>
+                    Madre amable, ruega por nosotros<br>
+                    Madre admirable, ruega por nosotros<br>
+                    Madre del buen consejo, ruega por nosotros<br>
+                    Madre del Creador, ruega por nosotros<br>
+                    Madre del Salvador, ruega por nosotros<br>
+                    Virgen prudentísima, ruega por nosotros<br>
+                    Virgen digna de veneración, ruega por nosotros<br>
+                    Virgen digna de alabanza, ruega por nosotros<br>
+                    Virgen poderosa, ruega por nosotros<br>
+                    Virgen clemente, ruega por nosotros<br>
+                    Virgen fiel, ruega por nosotros<br>
+                    Espejo de justicia, ruega por nosotros<br>
+                    Trono de la sabiduría, ruega por nosotros<br>
+                    Causa de nuestra alegría, ruega por nosotros<br>
+                    Vaso espiritual, ruega por nosotros<br>
+                    Vaso digno de honor, ruega por nosotros<br>
+                    Vaso de insigne devoción, ruega por nosotros<br>
+                    Rosa mística, ruega por nosotros<br>
+                    Torre de David, ruega por nosotros<br>
+                    Torre de marfil, ruega por nosotros<br>
+                    Casa de oro, ruega por nosotros<br>
+                    Arca de la Alianza, ruega por nosotros<br>
+                    Puerta del cielo, ruega por nosotros<br>
+                    Estrella de la mañana, ruega por nosotros<br>
+                    Salud de los enfermos, ruega por nosotros<br>
+                    Refugio de los pecadores, ruega por nosotros<br>
+                    Consuelo de los migrantes, ruega por nosotros<br>
+                    Consoladora de los afligidos, ruega por nosotros<br>
+                    Auxilio de los cristianos, ruega por nosotros<br>
+                    Reina de los Ángeles, ruega por nosotros<br>
+                    Reina de los Patriarcas, ruega por nosotros<br>
+                    Reina de los Profetas, ruega por nosotros<br>
+                    Reina de los Apóstoles, ruega por nosotros<br>
+                    Reina de los Mártires, ruega por nosotros<br>
+                    Reina de los Confesores, ruega por nosotros<br>
+                    Reina de las Vírgenes, ruega por nosotros<br>
+                    Reina de todos los Santos, ruega por nosotros<br>
+                    Reina concebida sin pecado original, ruega por nosotros<br>
+                    Reina asunta a los Cielos, ruega por nosotros<br>
+                    Reina del Santísimo Rosario, ruega por nosotros<br>
+                    Reina de la familia, ruega por nosotros<br>
+                    Reina de la paz, ruega por nosotros</p>
+                    
+                    <p>Cordero de Dios, que quitas el pecado del mundo, perdónanos, Señor<br>
+                    Cordero de Dios, que quitas el pecado del mundo, escúchanos, Señor<br>
+                    Cordero de Dios, que quitas el pecado del mundo, ten misericordia de nosotros</p>
+                    
+                    <p>Ruega por nosotros, Santa Madre de Dios<br>
+                    Para que seamos dignos de las promesas de Cristo</p>
+                </div>
+                
+                <div class="oracion">
+                    <p class="destacado">Oración</p>
+                    <p>Te rogamos nos concedas, Señor Dios nuestro, gozar de continua salud de alma y cuerpo, y por la gloriosa intercesión de la bienaventurada siempre Virgen María, vernos libres de las tristezas de la vida presente y disfrutar de las alegrías eternas. Por Cristo nuestro Señor. Amén.</p>
+                </div>
+            `;
+        });
+    </script>
+    <h3>¡Viva la Virgen!</h3> 
+</body>
+</html>
