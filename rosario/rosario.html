@@ -31,6 +31,27 @@
             background-color: #f0f4ff;
             border-left: 3px solid #0066cc;
             border-radius: 4px;
+            position: relative;
+        }
+        .oracion.completada {
+            background-color: #e8f5e9;
+            border-left-color: #4caf50;
+            opacity: 0.8;
+        }
+        .checkbox-container {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .checkbox-container input[type="checkbox"] {
+            margin-top: 5px;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .checkbox-container .oracion-content {
+            flex: 1;
         }
         .destacado {
             font-weight: bold;
@@ -56,12 +77,48 @@
             margin-bottom: 20px;
             border-left: 3px solid #2e7d32;
         }
+        .progreso {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .barra-progreso {
+            width: 100%;
+            height: 25px;
+            background-color: #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .barra-progreso-fill {
+            height: 100%;
+            background-color: #4caf50;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
     </style>
 </head>
 <body>
     <h1>Rosario de Hoy</h1>
     <a href="https://caminodefeweb.github.io/">Volver a inicio.</a> 
     <div class="fecha" id="fechaActual"></div>
+    
+    <div class="progreso">
+        <h3>Progreso del Rosario</h3>
+        <div class="barra-progreso">
+            <div class="barra-progreso-fill" id="barraProgreso">0%</div>
+        </div>
+        <p id="textoProgreso">0 de 0 oraciones completadas</p>
+    </div>
     
     <div id="misteriosDelDia"></div>
     
@@ -70,8 +127,102 @@
     <div id="contenidoMisterios"></div>
     
     <script>
+        let contadorOraciones = 0;
+        let totalOraciones = 0;
+
+        function actualizarProgreso() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const completadas = document.querySelectorAll('input[type="checkbox"]:checked').length;
+            totalOraciones = checkboxes.length;
+            
+            const porcentaje = totalOraciones > 0 ? Math.round((completadas / totalOraciones) * 100) : 0;
+            
+            document.getElementById('barraProgreso').style.width = porcentaje + '%';
+            document.getElementById('barraProgreso').textContent = porcentaje + '%';
+            document.getElementById('textoProgreso').textContent = `${completadas} de ${totalOraciones} oraciones completadas`;
+            
+            guardarProgreso();
+        }
+
+        function guardarProgreso() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const estados = {};
+            checkboxes.forEach((checkbox, index) => {
+                estados[index] = checkbox.checked;
+            });
+            const fecha = new Date().toDateString();
+            const data = {
+                fecha: fecha,
+                estados: estados
+            };
+            try {
+                const estadosStr = JSON.stringify(data);
+                // Guardar en variable temporal (no en localStorage)
+                window.progressData = estadosStr;
+            } catch (e) {
+                console.log('Error al guardar progreso');
+            }
+        }
+
+        function cargarProgreso() {
+            try {
+                const fecha = new Date().toDateString();
+                if (window.progressData) {
+                    const data = JSON.parse(window.progressData);
+                    if (data.fecha === fecha) {
+                        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                        checkboxes.forEach((checkbox, index) => {
+                            if (data.estados[index]) {
+                                checkbox.checked = true;
+                                checkbox.parentElement.parentElement.classList.add('completada');
+                            }
+                        });
+                        actualizarProgreso();
+                    }
+                }
+            } catch (e) {
+                console.log('Error al cargar progreso');
+            }
+        }
+
+        function reiniciarProgreso() {
+            if (confirm('¿Estás seguro de que quieres reiniciar el progreso del rosario?')) {
+                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                    checkbox.parentElement.parentElement.classList.remove('completada');
+                });
+                window.progressData = null;
+                actualizarProgreso();
+            }
+        }
+
+        function crearCheckbox(idUnico) {
+            return `
+                <div class="checkbox-container">
+                    <input type="checkbox" id="${idUnico}" onchange="marcarOracion(this)">
+                    <div class="oracion-content">
+            `;
+        }
+
+        function cerrarCheckbox() {
+            return `
+                    </div>
+                </div>
+            `;
+        }
+
+        function marcarOracion(checkbox) {
+            const oracionDiv = checkbox.parentElement.parentElement;
+            if (checkbox.checked) {
+                oracionDiv.classList.add('completada');
+            } else {
+                oracionDiv.classList.remove('completada');
+            }
+            actualizarProgreso();
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
-            // Obtener la fecha actual
             const hoy = new Date();
             const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -81,13 +232,12 @@
             
             document.getElementById('fechaActual').textContent = fechaCompleta;
             
-            // Determinar qué misterios corresponden al día
             let tipoMisterio;
             let misterios;
             
             switch(hoy.getDay()) {
-                case 1: // Lunes
-                case 6: // Sábado
+                case 1:
+                case 6:
                     tipoMisterio = "Gozosos";
                     misterios = [
                         "La Encarnación del Hijo de Dios",
@@ -97,8 +247,8 @@
                         "El Niño Jesús perdido y hallado en el templo"
                     ];
                     break;
-                case 2: // Martes
-                case 5: // Viernes
+                case 2:
+                case 5:
                     tipoMisterio = "Dolorosos";
                     misterios = [
                         "La Oración de Jesús en el huerto",
@@ -108,8 +258,8 @@
                         "La Crucifixión y Muerte de nuestro Señor"
                     ];
                     break;
-                case 3: // Miércoles
-                case 0: // Domingo
+                case 3:
+                case 0:
                     tipoMisterio = "Gloriosos";
                     misterios = [
                         "La Resurrección del Hijo de Dios",
@@ -119,7 +269,7 @@
                         "La Coronación de la Santísima Virgen como Reina de Cielos y Tierra"
                     ];
                     break;
-                case 4: // Jueves
+                case 4:
                     tipoMisterio = "Luminosos";
                     misterios = [
                         "El Bautismo de Jesús en el Jordán",
@@ -131,7 +281,6 @@
                     break;
             }
             
-            // Mostrar qué misterios se rezan hoy
             document.getElementById('misteriosDelDia').innerHTML = `
                 <div class="instrucciones">
                     <h2>Hoy se rezan los Misterios ${tipoMisterio}</h2>
@@ -139,12 +288,12 @@
                 </div>
             `;
             
-            // Añadir oraciones iniciales antes de los misterios
             document.getElementById('preMisterios').innerHTML = `
                 <div class="pre-misterios">
                     <h3>Oraciones Iniciales</h3>
                     
                     <div class="oracion">
+                        ${crearCheckbox('credo')}
                         <p class="destacado">Credo</p>
                         <p>Creo en Dios, Padre todopoderoso, Creador del cielo y de la tierra. 
                         Creo en Jesucristo, su único Hijo, nuestro Señor, que fue concebido por obra y gracia del Espíritu Santo, 
@@ -153,33 +302,46 @@
                         y está sentado a la derecha de Dios, Padre todopoderoso. Desde allí ha de venir a juzgar a vivos y muertos. 
                         Creo en el Espíritu Santo, la santa Iglesia católica, la comunión de los santos, el perdón de los pecados, 
                         la resurrección de la carne y la vida eterna. Amén.</p>
+                        ${cerrarCheckbox()}
                     </div>
                     
                     <div class="oracion">
+                        ${crearCheckbox('padrenuestro-inicial')}
                         <p class="destacado">Padrenuestro</p>
                         <p>Padre nuestro, que estás en el cielo, santificado sea tu Nombre; venga a nosotros tu reino; hágase tu voluntad en la tierra como en el cielo. Danos hoy nuestro pan de cada día; perdona nuestras ofensas como también nosotros perdonamos a los que nos ofenden; no nos dejes caer en la tentación y líbranos del mal. Amén.</p>
+                        ${cerrarCheckbox()}
                     </div>
                     
                     <div class="oracion">
-                        <p class="destacado">Tres Avemarías</p>
-                        <p>1ª Avemaría<br>
-                        Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús. Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
-                        
-                        <p>2ª Avemaría<br>
-                        Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús. Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
-                        
-                        <p>3ª Avemaría<br>
-                        Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús. Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                        ${crearCheckbox('avemaria-1-inicial')}
+                        <p class="destacado">1ª Avemaría</p>
+                        <p>Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús. Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                        ${cerrarCheckbox()}
                     </div>
                     
                     <div class="oracion">
+                        ${crearCheckbox('avemaria-2-inicial')}
+                        <p class="destacado">2ª Avemaría</p>
+                        <p>Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús. Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                        ${cerrarCheckbox()}
+                    </div>
+                    
+                    <div class="oracion">
+                        ${crearCheckbox('avemaria-3-inicial')}
+                        <p class="destacado">3ª Avemaría</p>
+                        <p>Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús. Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                        ${cerrarCheckbox()}
+                    </div>
+                    
+                    <div class="oracion">
+                        ${crearCheckbox('gloria-inicial')}
                         <p class="destacado">Gloria</p>
                         <p>Gloria al Padre y al Hijo y al Espíritu Santo. Como era en el principio, ahora y siempre, por los siglos de los siglos. Amén.</p>
+                        ${cerrarCheckbox()}
                     </div>
                 </div>
             `;
             
-            // Generar el contenido HTML para los 5 misterios
             let contenidoHTML = '';
             
             for (let i = 0; i < misterios.length; i++) {
@@ -188,57 +350,49 @@
                         <h3>Misterio ${i+1}: ${misterios[i]}</h3>
                         
                         <div class="oracion">
+                            ${crearCheckbox('padrenuestro-m' + (i+1))}
                             <p class="destacado">Padrenuestro</p>
                             <p>Padre nuestro, que estás en el cielo, santificado sea tu Nombre; venga a nosotros tu reino; hágase tu voluntad en la tierra como en el cielo.Danos hoy nuestro pan de cada día; perdona nuestras ofensas como también nosotros perdonamos a los que nos ofenden; no nos dejes caer en la tentación y líbranos del mal. Amén.</p>
+                            ${cerrarCheckbox()}
                         </div>
                         
                         <div class="oracion">
                             <p class="destacado">Avemarías</p>
-                            
-                            <p>1ª Avemaría<br>
+                `;
+                
+                for (let j = 1; j <= 10; j++) {
+                    contenidoHTML += `
+                        <div style="margin: 10px 0;">
+                            ${crearCheckbox('avemaria-m' + (i+1) + '-' + j)}
+                            <p style="margin: 0;"><strong>${j}ª Avemaría</strong><br>
                             Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
-                            
-                            <p>2ª Avemaría<br>
-                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
-                            
-                            <p>3ª Avemaría<br>
-                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
-                            
-                            <p>4ª Avemaría<br>
-                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
-                            
-                            <p>5ª Avemaría<br>
-                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
-                            
-                            <p>6ª Avemaría<br>
-                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
-                            
-                            <p>7ª Avemaría<br>
-                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
-                            
-                            <p>8ª Avemaría<br>
-                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
-                            
-                            <p>9ª Avemaría<br>
-                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
-                            
-                            <p>10ª Avemaría<br>
-                            Dios te salve, María, llena eres de gracia; el Señor es contigo, bendita Tú eres entre todas las mujeres y bendito es el fruto de tu vientre, Jesús.Santa María, Madre de Dios, ruega por nosotros, pecadores, ahora y en la hora de nuestra muerte. Amén.</p>
+                            ${cerrarCheckbox()}
+                        </div>
+                    `;
+                }
+                
+                contenidoHTML += `
                         </div>
                         
                         <div class="oracion">
+                            ${crearCheckbox('gloria-m' + (i+1))}
                             <p class="destacado">Gloria</p>
                             <p>Gloria al Padre y al Hijo y al Espíritu Santo.Como era en el principio, ahora y siempre, por los siglos de los siglos. Amén.</p>
+                            ${cerrarCheckbox()}
                         </div>
                         
                         <div class="oracion">
+                            ${crearCheckbox('maria-m' + (i+1))}
                             <p class="destacado">María, Madre de gracia</p>
                             <p>María, Madre de gracia, Madre de misericordia. Defiéndenos de nuestros enemigos y ampáranos ahora y en la hora de nuestra muerte. Amén.</p>
+                            ${cerrarCheckbox()}
                         </div>
                         
                         <div class="oracion">
+                            ${crearCheckbox('jesus-m' + (i+1))}
                             <p class="destacado">Oh, Jesús Mío</p>
                             <p>Oh Jesús mío, perdónanos. Líbranos del fuego del infierno, lleva a todas las almas al cielo, especialmente a las más necesitadas.</p>
+                            ${cerrarCheckbox()}
                         </div>
                     </div>
                 `;
@@ -246,8 +400,15 @@
             
             document.getElementById('contenidoMisterios').innerHTML = contenidoHTML;
             
-            // Añadir letanías al final del rosario
             document.getElementById('contenidoMisterios').innerHTML += `
+                <h2>Salve</h2>
+                <div class="oracion">
+                    ${crearCheckbox('salve')}
+                    <p class="destacado">Salve</p>
+                    <p>Dios te salve, Reina y Madre de misericordia, vida, dulzura y esperanza nuestra; Dios te salve. A Ti llamamos los desterrados hijos de Eva; a Ti suspiramos, gimiendo y llorando en este valle de lágrimas. Ea, pues, Señora, abogada nuestra, vuelve a nosotros esos tus ojos misericordiosos; y después de este destierro, muéstranos a Jesús, fruto bendito de tu vientre. Oh clementísima, oh piadosa, oh dulce Virgen María. Ruega por nosotros, Santa Madre de Dios, para que seamos dignos de alcanzar las promesas de nuestro Señor Jesucristo. Amén.</p>
+                    ${cerrarCheckbox()}
+                </div>
+                
                 <h2>Letanías de la Santísima Virgen</h2>
                 <div class="oracion">
                     <p>Señor, ten piedad<br>
@@ -329,6 +490,9 @@
                     <p>Te rogamos nos concedas, Señor Dios nuestro, gozar de continua salud de alma y cuerpo, y por la gloriosa intercesión de la bienaventurada siempre Virgen María, vernos libres de las tristezas de la vida presente y disfrutar de las alegrías eternas. Por Cristo nuestro Señor. Amén.</p>
                 </div>
             `;
+            
+            actualizarProgreso();
+            cargarProgreso();
         });
     </script>
     <h3>¡Viva la Virgen!</h3> 
