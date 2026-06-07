@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Binary Rain — Modo Estudio</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    overflow: hidden;
+    font-family: 'Share Tech Mono', monospace;
+    cursor: none;
+  }
+
+  canvas { display: block; }
+
+  #clock {
+    position: fixed;
+    top: 28px;
+    right: 36px;
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    color: rgba(0,255,70,0.55);
+    letter-spacing: 3px;
+    text-shadow: 0 0 10px rgba(0,255,70,0.3);
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  #timer-wrap {
+    position: fixed;
+    top: 62px;
+    right: 36px;
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    color: rgba(0,255,70,0.3);
+    letter-spacing: 2px;
+    z-index: 10;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  #surprise-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+
+  #surprise-text {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(28px, 5vw, 64px);
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: 4px;
+    padding: 0 40px;
+    line-height: 1.3;
+    text-transform: uppercase;
+    white-space: pre-line;
+  }
+
+  #surprise-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(13px, 1.8vw, 20px);
+    letter-spacing: 3px;
+    margin-top: 16px;
+    opacity: 0.7;
+    text-align: center;
+    padding: 0 40px;
+  }
+
+  #scan-line {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(0,255,70,0.08);
+    animation: scan 8s linear infinite;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  @keyframes scan {
+    0%   { top: -3px; }
+    100% { top: 100vh; }
+  }
+
+  #vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.65) 100%);
+    z-index: 4;
+  }
+
+  #corner-tl, #corner-tr, #corner-bl, #corner-br {
+    position: fixed;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: rgba(0,255,70,0.18);
+    letter-spacing: 1px;
+    pointer-events: none;
+    z-index: 10;
+    line-height: 1.7;
+  }
+
+  #corner-tl { top: 20px; left: 20px; }
+  #corner-tr { top: 20px; right: 160px; text-align: right; }
+  #corner-bl { bottom: 20px; left: 20px; }
+  #corner-br { bottom: 20px; right: 20px; text-align: right; }
+
+  .blink { animation: blink 1.4s step-end infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  #mode-hint {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: rgba(0,255,70,0.2);
+    letter-spacing: 2px;
+    pointer-events: none;
+    z-index: 10;
+    white-space: nowrap;
+  }
+
+  #glitch-canvas {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 6;
+    opacity: 0;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="rain"></canvas>
+<canvas id="glitch-canvas"></canvas>
+<div id="scan-line"></div>
+<div id="vignette"></div>
+
+<div id="clock">00:00:00</div>
+<div id="timer-wrap">
+  <span>⏱</span><span id="study-timer">00:00</span>
+</div>
+
+<div id="surprise-overlay">
+  <div id="surprise-text"></div>
+  <div id="surprise-sub"></div>
+</div>
+
+<div id="corner-tl">
+  SYS:<span class="blink">█</span><br>
+  VER: 2.0.1<br>
+  NET: <span id="net-stat">OK</span>
+</div>
+<div id="corner-tr">
+  MODE: FOCUS<br>
+  CPU: <span id="cpu-fake">--</span>%<br>
+  MEM: <span id="mem-fake">--</span>
+</div>
+<div id="corner-bl">
+  RAIN: ACTIVE<br>
+  SRC: BINARY<br>
+  FLOW: <span id="flow-stat">MAX</span>
+</div>
+<div id="corner-br">
+  SESSION: OK<br>
+  SURPRISES: ON<br>
+  BRAIN: <span class="blink">ONLINE</span>
+</div>
+
+<div id="mode-hint">[ ESPACIO: pausa · C: color · F: pantalla completa ]</div>
+
+<script>
+const canvas   = document.getElementById('rain');
+const ctx      = canvas.getContext('2d');
+const glCanvas = document.getElementById('glitch-canvas');
+const glCtx    = glCanvas.getContext('2d');
+
+let W = canvas.width = glCanvas.width = window.innerWidth;
+let H = canvas.height = glCanvas.height = window.innerHeight;
+
+const FONT_SIZE = 14;
+const COLS = Math.floor(W / FONT_SIZE);
+
+const drops    = Array.from({length: COLS}, () => Math.random() * -(H / FONT_SIZE));
+const speeds   = Array.from({length: COLS}, () => 0.15 + Math.random() * 0.25);
+/* carácter estable por columna — se renueva cada flipIn[i] frames */
+const colChars = Array.from({length: COLS}, () => Math.random() < 0.5 ? '0' : '1');
+const flipIn   = Array.from({length: COLS}, () => Math.floor(5 + Math.random() * 15));
+const flipCnt  = Array.from({length: COLS}, () => 0);
+
+const PALETTES = [
+  { name: 'Matrix Verde',  head: '#ccffcc', trail: '#00ff44', mid: '#007722', bg: 'rgba(0,0,0,0.05)' },
+  { name: 'Cyber Azul',    head: '#cceeff', trail: '#00ccff', mid: '#005588', bg: 'rgba(0,0,8,0.05)'  },
+  { name: 'Rojo Infernal', head: '#ffcccc', trail: '#ff4422', mid: '#880800', bg: 'rgba(8,0,0,0.05)'  },
+  { name: 'Purpura Dark',  head: '#eeccff', trail: '#cc44ff', mid: '#550077', bg: 'rgba(4,0,8,0.05)'  },
+  { name: 'Dorado Hack',   head: '#ffffcc', trail: '#ffcc00', mid: '#886600', bg: 'rgba(8,6,0,0.05)'  },
+];
+
+let palette = 0;
+let paused  = false;
+
+const SURPRISES = [
+  /* motivación */
+  { text: '¡Vas muy bien!',             sub: 'El esfuerzo siempre da frutos.',              color: '#00ff44' },
+  { text: 'KEEP GOING',                 sub: 'No te rindas ahora.',                          color: '#ffcc00' },
+  { text: 'FOCUS LEVEL: MAX',           sub: '████████████ 100%',                            color: '#00ffff' },
+  { text: '¡Tú puedes!',               sub: 'Cada minuto que estudias cuenta.',             color: '#00ff99' },
+  { text: 'MODO ÉLITE',                 sub: 'Clasificación: ESTUDIANTE PRO ✓',              color: '#ff6622' },
+  { text: '¡Casi lo tienes!',          sub: 'La constancia vence al talento.',              color: '#88ff00' },
+  { text: 'PROGRESO = ÉXITO',           sub: 'Pequeños pasos, grandes logros.',              color: '#00ccff' },
+  { text: 'SIN EXCUSAS',               sub: 'Tu yo del futuro te lo agradecerá.',           color: '#ff44aa' },
+  { text: 'IMPARABLE',                  sub: 'Nadie puede detenerte cuando te enfocas.',     color: '#ffaa00' },
+  { text: 'UN DÍA MÁS',                sub: 'Los mejores se forjan en la constancia.',      color: '#44ffcc' },
+  { text: 'NIVEL +1',                   sub: 'Tu cerebro acaba de subir de nivel.',          color: '#ccff44' },
+  /* descanso / salud */
+  { text: '¿Agua? 💧',                 sub: 'Hidrátate. Tu cerebro te lo pide.',            color: '#44ffee' },
+  { text: 'Respira.',                   sub: '4 inhala · 4 retén · 4 exhala.',               color: '#aaffcc' },
+  { text: '¿Cuánto llevas?',           sub: '5 min de pausa cada 50 es óptimo.',            color: '#ffaa00' },
+  { text: 'PARPADEA 👁',               sub: '20 min de pantalla? Mira a 6 m por 20 seg.',   color: '#ccff44' },
+  { text: '¡Estira!',                  sub: 'Cuello · hombros · muñecas. 30 segundos.',     color: '#ffcc88' },
+  { text: 'SNACK SALUDABLE',           sub: 'Glucosa estable = concentración estable.',     color: '#aaff44' },
+  { text: '¿DORMISTE BIEN?',           sub: 'El sueño consolida lo que aprendes.',          color: '#aaaaff' },
+  /* humor / easter eggs */
+  { text: 'ERROR 404',                 sub: 'Excusa para dejar de estudiar: NOT FOUND',     color: '#ff4444' },
+  { text: '⚡ CARGANDO GENIO…',        sub: 'Procesando nuevas sinapsis…',                  color: '#cc44ff' },
+  { text: '🧠 NEURAL BOOST',           sub: 'Modo concentración extrema activado.',         color: '#88ff00' },
+  { text: 'ACCESO AUTORIZADO',         sub: 'Contraseña correcta: esfuerzo-diario',         color: '#00ff44' },
+  { text: '01000001\n01001101\n01001111', sub: 'A · M · O  estudiar  (en binario)',         color: '#00ff44' },
+  { text: 'MODO MATRIX',               sub: '¿Píldora roja o píldora azul?',                color: '#00ccff' },
+  { text: 'SISTEMA DETECTA…',          sub: '…un cerebro trabajando duro. Bien hecho.',     color: '#ffcc00' },
+  { text: 'FIREWALL ACTIVO',           sub: 'Distracción bloqueada con éxito ✓',            color: '#ff4422' },
+  { text: 'CARGANDO SABIDURÍA…',       sub: '██████████ 99% — un momento…',                color: '#cc44ff' },
+  { text: 'INICIANDO TURBO BRAIN',     sub: 'Velocidad de proceso aumentada x2.',           color: '#00ffcc' },
+  { text: 'HACK THE FUTURE',           sub: 'Estudiando hoy para dominarlo mañana.',        color: '#ffff44' },
+  { text: 'COMPILANDO ÉXITO…',         sub: 'Sin errores encontrados en tu actitud.',       color: '#44ff88' },
+  { text: '// TODO: ser increíble',    sub: '// DONE: ya lo eres.',                         color: '#ff88ff' },
+  { text: 'GIT COMMIT -M "SIGO"',      sub: 'Pushing changes to: mi-futuro/main',           color: '#88ffff' },
+];
+
+let nextSurprise  = 25 + Math.random() * 30;
+let surpriseTimer = 0;
+let lastTime      = performance.now();
+
+const overlay      = document.getElementById('surprise-overlay');
+const surpriseText = document.getElementById('surprise-text');
+const surpriseSub  = document.getElementById('surprise-sub');
+
+function showSurprise() {
+  const s = SURPRISES[Math.floor(Math.random() * SURPRISES.length)];
+  surpriseText.textContent = s.text;
+  surpriseSub.textContent  = s.sub;
+  surpriseText.style.color = s.color;
+  surpriseSub.style.color  = s.color;
+  overlay.style.textShadow = `0 0 40px ${s.color}66, 0 0 80px ${s.color}33`;
+  overlay.style.opacity    = '1';
+  if (Math.random() < 0.35) triggerGlitch();
+  setTimeout(() => { overlay.style.opacity = '0'; }, 3400);
+  nextSurprise  = 22 + Math.random() * 35;
+  surpriseTimer = 0;
+}
+
+function triggerGlitch() {
+  let t = 0;
+  const gi = setInterval(() => {
+    glCtx.clearRect(0, 0, W, H);
+    if (t > 700) { clearInterval(gi); glCanvas.style.opacity = 0; return; }
+    glCanvas.style.opacity = 0.18;
+    for (let i = 0; i < 6; i++) {
+      const y = Math.random() * H;
+      const h = 2 + Math.random() * 14;
+      const x = (Math.random() - 0.5) * 30;
+      glCtx.drawImage(canvas, 0, y, W, h, x, y, W, h);
+    }
+    t += 50;
+  }, 50);
+}
+
+function draw(ts) {
+  const dt = (ts - lastTime) / 1000;
+  lastTime = ts;
+
+  if (!paused) {
+    surpriseTimer += dt;
+    if (surpriseTimer > nextSurprise) showSurprise();
+  }
+
+  const p = PALETTES[palette];
+  ctx.fillStyle = p.bg;
+  ctx.fillRect(0, 0, W, H);
+  ctx.font = `${FONT_SIZE}px "Share Tech Mono", monospace`;
+
+  for (let i = 0; i < COLS; i++) {
+    /* rotar carácter solo cada flipIn[i] frames */
+    flipCnt[i]++;
+    if (flipCnt[i] >= flipIn[i]) {
+      colChars[i] = colChars[i] === '0' ? '1' : '0';
+      flipCnt[i]  = 0;
+      flipIn[i]   = Math.floor(5 + Math.random() * 15);
+    }
+
+    const y = drops[i] * FONT_SIZE;
+    const x = i * FONT_SIZE;
+
+    ctx.fillStyle = p.head;
+    ctx.fillText(colChars[i], x, y);
+
+    ctx.fillStyle = p.trail;
+    ctx.fillText(colChars[i] === '0' ? '1' : '0', x, y - FONT_SIZE);
+
+    ctx.fillStyle = p.mid;
+    ctx.fillText(colChars[i], x, y - FONT_SIZE * 2);
+
+    if (!paused) drops[i] += speeds[i];
+
+    if (drops[i] * FONT_SIZE > H && Math.random() > 0.975) {
+      drops[i]  = -Math.random() * 20;
+      speeds[i] = 0.15 + Math.random() * 0.25;
+    }
+  }
+
+  requestAnimationFrame(draw);
+}
+
+requestAnimationFrame(draw);
+
+window.addEventListener('resize', () => {
+  W = canvas.width = glCanvas.width = window.innerWidth;
+  H = canvas.height = glCanvas.height = window.innerHeight;
+});
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') {
+    paused = !paused;
+    document.getElementById('flow-stat').textContent = paused ? 'PAUSED' : 'MAX';
+  }
+  if (e.key === 'c' || e.key === 'C') {
+    palette = (palette + 1) % PALETTES.length;
+    const p = PALETTES[palette];
+    surpriseText.textContent = p.name;
+    surpriseSub.textContent  = '— Modo de color activado —';
+    surpriseText.style.color = p.trail;
+    surpriseSub.style.color  = p.trail;
+    overlay.style.textShadow = `0 0 30px ${p.trail}55`;
+    overlay.style.opacity    = '1';
+    setTimeout(() => { overlay.style.opacity = '0'; }, 1800);
+  }
+  if (e.key === 'f' || e.key === 'F') {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+  }
+});
+
+function updateClock() {
+  const n  = new Date();
+  const hh = String(n.getHours()).padStart(2,'0');
+  const mm = String(n.getMinutes()).padStart(2,'0');
+  const ss = String(n.getSeconds()).padStart(2,'0');
+  document.getElementById('clock').textContent = `${hh}:${mm}:${ss}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+const startTime = Date.now();
+setInterval(() => {
+  const e = Math.floor((Date.now() - startTime) / 1000);
+  const m = String(Math.floor(e / 60)).padStart(2,'0');
+  const s = String(e % 60).padStart(2,'0');
+  document.getElementById('study-timer').textContent = `${m}:${s}`;
+}, 1000);
+
+function updateFakeStats() {
+  document.getElementById('cpu-fake').textContent = String(12 + Math.floor(Math.random() * 6));
+  document.getElementById('mem-fake').textContent = (1.2 + Math.random() * 0.4).toFixed(1) + 'GB';
+  document.getElementById('net-stat').textContent = Math.random() > 0.05 ? 'OK' : '···';
+}
+setInterval(updateFakeStats, 2000);
+updateFakeStats();
+</script>
+</body>
+</html>
