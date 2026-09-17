@@ -1,152 +1,1280 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="light">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Mendoza Transit - API Real (Fix)</title>
-  
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  
-  <style>
-    :root { --primary: #2e7d32; --tram: #d32f2f; }
-    body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-    #map { height: 100vh; width: 100%; z-index: 1; }
-    .top-bar {
-      position: absolute; top: 15px; left: 15px; right: 15px;
-      background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
-      padding: 15px; border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 1000;
-    }
-    .top-bar h1 { margin: 0 0 10px 0; font-size: 1.2rem; color: #333; }
-    .status { font-size: 0.85rem; font-weight: bold; display: flex; align-items: center; gap: 5px; }
-    .fab-location {
-      position: absolute; bottom: 30px; right: 20px; z-index: 1000;
-      width: 50px; height: 50px; background: white; border-radius: 50%;
-      display: flex; justify-content: center; align-items: center;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer; border: none;
-      font-size: 1.2rem; color: #333;
-    }
-    .custom-icon {
-      background: white; border-radius: 50%; border: 2px solid;
-      display: flex; justify-content: center; align-items: center;
-      box-shadow: 0 3px 6px rgba(0,0,0,0.3); font-size: 1.1rem; color: white;
-    }
-    .icon-bike { background-color: var(--primary); border-color: white; }
-    .icon-tram { background-color: var(--tram); border-color: white; }
-    .popup-title { font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 5px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2e7d32">
+<meta name="description" content="Mapa de estaciones de bicicletas públicas y paradas de tranvía del Gran Mendoza.">
+<title>Mendoza Transit · Datos abiertos</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+:root{
+  --primary:#2e7d32; --primary-dark:#1b5e20;
+  --tram:#d32f2f;    --tram-dark:#b71c1c;
+  --blue:#1976d2;    --amber:#f59e0b;
+  --text:#1f2933;    --muted:#64748b;
+  --bg:#f8fafc;      --surface:#ffffff;
+  --border:#e2e8f0;  --hover:#f1f5f9;
+  --panel:rgba(255,255,255,.94);
+  --radius:16px;
+  --shadow:0 8px 30px rgba(15,23,42,.18);
+  --shadow-sm:0 2px 8px rgba(15,23,42,.1);
+}
+[data-theme="dark"]{
+  --text:#e2e8f0;   --muted:#94a3b8;
+  --bg:#0f172a;     --surface:#1e293b;
+  --border:#334155; --hover:#334155;
+  --panel:rgba(30,41,59,.95);
+  --shadow:0 8px 30px rgba(0,0,0,.5);
+  --shadow-sm:0 2px 8px rgba(0,0,0,.3);
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+html,body{ height:100%; margin:0; }
+body{
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  color:var(--text); background:var(--bg);
+  overflow:hidden; -webkit-tap-highlight-color:transparent;
+  transition:background .25s,color .25s;
+}
+
+#map{ position:absolute; inset:0; z-index:1; background:var(--bg); }
+
+/* ------- Topbar ------- */
+.topbar{
+  position:absolute; top:0; left:0; right:0;
+  padding:max(10px,env(safe-area-inset-top)) 12px 10px;
+  display:flex; align-items:center; gap:8px;
+  background:var(--panel);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);
+  z-index:1100;
+}
+.topbar__title{
+  margin:0; font-size:1rem; font-weight:700;
+  display:flex; align-items:center; gap:8px;
+  flex:1; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.topbar__title i{ color:var(--primary); }
+
+.icon-btn{
+  flex:0 0 auto;
+  width:38px; height:38px;
+  display:grid; place-items:center;
+  border:0; border-radius:10px;
+  background:var(--hover); color:var(--text);
+  font-size:1rem; cursor:pointer;
+  position:relative;
+  transition:background .2s,transform .15s;
+}
+.icon-btn:hover{ background:var(--border); }
+.icon-btn:active{ transform:scale(.92); }
+.icon-btn.is-loading i{ animation:spin 1s linear infinite; }
+.icon-btn__badge{
+  position:absolute; top:-4px; right:-4px;
+  min-width:18px; height:18px; padding:0 4px;
+  border-radius:9px; background:var(--amber); color:#fff;
+  font-size:.65rem; font-weight:700; line-height:18px; text-align:center;
+  display:none;
+}
+.icon-btn__badge.is-on{ display:block; }
+
+@keyframes spin{ to{ transform:rotate(360deg); } }
+
+/* ------- Filtros ------- */
+.filterbar{
+  position:absolute;
+  top:calc(max(10px,env(safe-area-inset-top)) + 58px);
+  left:12px; right:12px;
+  display:flex; gap:8px; z-index:1050;
+  pointer-events:none;
+}
+.filterbar > *{ pointer-events:auto; }
+
+.chip{
+  position:relative;
+  display:flex; align-items:center; gap:7px;
+  padding:8px 12px;
+  background:var(--panel);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border:1.5px solid var(--border); border-radius:11px;
+  color:var(--muted); font-size:.82rem; font-weight:600;
+  cursor:pointer; user-select:none;
+  box-shadow:var(--shadow-sm);
+  transition:all .2s;
+}
+.chip input{ position:absolute; width:0; height:0; opacity:0; }
+.chip__count{
+  padding:1px 7px; border-radius:999px;
+  background:rgba(0,0,0,.1);
+  font-size:.72rem; font-variant-numeric:tabular-nums;
+}
+.chip--bike.is-on{ border-color:var(--primary); background:#e8f5e9; color:var(--primary-dark); }
+.chip--tram.is-on{ border-color:var(--tram);    background:#ffebee; color:var(--tram-dark); }
+[data-theme="dark"] .chip--bike.is-on{ background:#1b3a1e; color:#a5d6a7; }
+[data-theme="dark"] .chip--tram.is-on{ background:#4a1c1c; color:#ef9a9a; }
+
+/* ------- Botón "mi ubicación" ------- */
+.fab{
+  position:absolute;
+  right:16px;
+  bottom:calc(24px + env(safe-area-inset-bottom));
+  width:52px; height:52px;
+  display:grid; place-items:center;
+  border:0; border-radius:50%;
+  background:var(--surface); color:var(--blue);
+  font-size:1.15rem;
+  box-shadow:var(--shadow);
+  cursor:pointer; z-index:1000;
+  transition:transform .18s,background .2s;
+}
+.fab:hover{ background:var(--hover); }
+.fab:active{ transform:scale(.9); }
+.fab.is-locating i{ animation:spin 1s linear infinite; }
+
+/* ------- Sidebar ------- */
+.sidebar{
+  position:absolute;
+  top:0; left:0; bottom:0;
+  width:min(360px,88vw);
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  box-shadow:var(--shadow);
+  z-index:1200;
+  display:flex; flex-direction:column;
+  padding-top:calc(max(10px,env(safe-area-inset-top)) + 58px);
+  transform:translateX(-105%);
+  transition:transform .28s cubic-bezier(.4,0,.2,1);
+  will-change:transform;
+}
+.sidebar.is-open{ transform:translateX(0); }
+
+.sidebar__scroll{
+  overflow-y:auto;
+  flex:1;
+  -webkit-overflow-scrolling:touch;
+}
+.sidebar__section{ padding:12px 14px; border-bottom:1px solid var(--border); }
+.sidebar__label{
+  display:block; margin-bottom:6px;
+  font-size:.72rem; font-weight:700; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.05em;
+}
+
+.search-wrap{ position:relative; }
+.search-wrap i{
+  position:absolute; left:12px; top:50%; transform:translateY(-50%);
+  color:var(--muted); font-size:.85rem; pointer-events:none;
+}
+.search-input{
+  width:100%; padding:10px 12px 10px 34px;
+  border:1.5px solid var(--border); border-radius:10px;
+  background:var(--bg); color:var(--text);
+  font-size:.85rem; font-family:inherit;
+  transition:border-color .2s;
+}
+.search-input:focus{ outline:0; border-color:var(--primary); }
+
+.range-row{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.range-row strong{ font-size:.85rem; color:var(--text); font-variant-numeric:tabular-nums; }
+input[type="range"]{
+  width:100%; accent-color:var(--primary);
+  margin:0;
+}
+
+.sidebar__row{ display:flex; gap:8px; align-items:center; }
+select{
+  flex:1; padding:8px 10px;
+  border:1.5px solid var(--border); border-radius:10px;
+  background:var(--bg); color:var(--text);
+  font-size:.82rem; font-family:inherit;
+}
+select:focus{ outline:0; border-color:var(--primary); }
+
+.clear-btn{
+  padding:8px 10px;
+  border:1.5px solid var(--border); border-radius:10px;
+  background:var(--bg); color:var(--text);
+  font-size:.8rem; cursor:pointer;
+  transition:background .2s;
+}
+.clear-btn:hover{ background:var(--hover); }
+
+.station-list{ list-style:none; padding:0; margin:0; }
+
+.station-item{
+  padding:10px 14px;
+  border-bottom:1px solid var(--border);
+  cursor:pointer;
+  display:flex; align-items:flex-start; gap:10px;
+  transition:background .15s;
+}
+.station-item:hover{ background:var(--hover); }
+.station-item.is-active{ background:var(--hover); }
+
+.station-item__icon{
+  flex:0 0 auto;
+  width:32px; height:32px;
+  display:grid; place-items:center;
+  border-radius:50%; color:#fff; font-size:.85rem;
+}
+.station-item__icon--bike{ background:var(--primary); }
+.station-item__icon--tram{ background:var(--tram); }
+
+.station-item__body{ flex:1; min-width:0; }
+.station-item__name{
+  font-size:.85rem; font-weight:600; color:var(--text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.station-item__meta{
+  margin-top:2px;
+  font-size:.72rem; color:var(--muted);
+  display:flex; gap:8px; flex-wrap:wrap;
+}
+.station-item__meta span{ display:inline-flex; align-items:center; gap:3px; }
+
+.station-item__fav{
+  flex:0 0 auto;
+  border:0; background:transparent; cursor:pointer;
+  padding:4px; color:#cbd5e1; font-size:.95rem;
+  transition:color .15s,transform .15s;
+}
+.station-item__fav:hover{ transform:scale(1.15); }
+.station-item__fav.is-on{ color:var(--amber); }
+
+.empty-state{
+  padding:30px 20px; text-align:center;
+  color:var(--muted); font-size:.82rem;
+}
+.empty-state i{ font-size:1.8rem; margin-bottom:8px; opacity:.5; display:block; }
+
+/* ------- Backdrop móvil ------- */
+.backdrop{
+  position:absolute; inset:0;
+  background:rgba(15,23,42,.45);
+  z-index:1150; opacity:0; pointer-events:none;
+  transition:opacity .25s;
+}
+.backdrop.is-on{ opacity:1; pointer-events:auto; }
+
+/* ------- Marcadores ------- */
+.pin{
+  width:30px; height:30px;
+  display:grid; place-items:center;
+  border:2.5px solid #fff; border-radius:50%;
+  color:#fff; font-size:.85rem;
+  box-shadow:0 3px 8px rgba(0,0,0,.3);
+  transition:transform .15s;
+}
+.pin--bike{ background:var(--primary); }
+.pin--tram{ background:var(--tram); }
+.pin--fav{ box-shadow:0 0 0 3px var(--amber),0 3px 8px rgba(0,0,0,.3); }
+
+.cluster{
+  width:100%; height:100%;
+  display:grid; place-items:center;
+  border:3px solid #fff; border-radius:50%;
+  color:#fff; font-weight:700; font-size:.78rem;
+  font-variant-numeric:tabular-nums;
+  box-shadow:0 4px 12px rgba(0,0,0,.28);
+}
+.cluster--bike{ background:rgba(46,125,50,.92); }
+.cluster--tram{ background:rgba(211,47,47,.92); }
+
+/* ------- Popups ------- */
+.leaflet-popup-content-wrapper{ border-radius:14px; padding:0; overflow:hidden; background:var(--surface); color:var(--text); }
+.leaflet-popup-content{ margin:0; width:auto !important; }
+.leaflet-popup-tip{ background:var(--surface); }
+
+.popup__head{
+  display:flex; align-items:center; gap:8px;
+  padding:10px 12px;
+  color:#fff; font-size:.85rem; font-weight:700;
+}
+.popup__head--bike{ background:var(--primary); }
+.popup__head--tram{ background:var(--tram); }
+.popup__head i{ flex:0 0 auto; }
+.popup__head span{ flex:1; min-width:0; }
+.popup__fav{
+  border:0; background:transparent; color:rgba(255,255,255,.6);
+  cursor:pointer; font-size:.9rem; padding:2px 4px;
+  transition:color .15s,transform .15s;
+}
+.popup__fav:hover{ transform:scale(1.15); }
+.popup__fav.is-on{ color:var(--amber); }
+
+.popup__body{ padding:9px 12px; }
+.popup__row{
+  display:flex; justify-content:space-between; gap:12px;
+  padding:3px 0; font-size:.77rem;
+}
+.popup__key{ color:var(--muted); flex:0 0 auto; }
+.popup__val{ font-weight:600; text-align:right; word-break:break-word; }
+.popup__val a{ color:var(--blue); text-decoration:none; }
+.popup__val a:hover{ text-decoration:underline; }
+
+.popup__actions{ display:flex; gap:6px; padding:0 12px 12px; }
+.popup__actions a,.popup__actions button{
+  flex:1; padding:7px; border-radius:9px;
+  border:0; background:var(--hover); color:var(--text);
+  font-size:.74rem; font-weight:600; text-align:center;
+  text-decoration:none; cursor:pointer; font-family:inherit;
+  transition:background .2s;
+  display:inline-flex; align-items:center; justify-content:center; gap:5px;
+}
+.popup__actions a:hover,.popup__actions button:hover{ background:var(--border); }
+
+/* ------- Toast ------- */
+.toast{
+  position:absolute;
+  bottom:calc(90px + env(safe-area-inset-bottom));
+  left:50%; transform:translateX(-50%) translateY(20px);
+  padding:10px 16px; border-radius:12px;
+  background:var(--surface); color:var(--text);
+  box-shadow:var(--shadow); font-size:.82rem; font-weight:600;
+  z-index:2000; opacity:0; pointer-events:none;
+  transition:opacity .25s,transform .25s;
+  display:flex; align-items:center; gap:8px;
+}
+.toast.is-on{ opacity:1; transform:translateX(-50%) translateY(0); }
+.toast i{ color:var(--primary); }
+
+/* ------- Filtros de marca ------- */
+.leaflet-control-attribution{
+  background:var(--panel) !important; color:var(--muted) !important;
+  font-size:.65rem !important;
+}
+.leaflet-control-attribution a{ color:var(--blue) !important; }
+.leaflet-bar{ box-shadow:var(--shadow-sm) !important; }
+.leaflet-bar a{
+  background:var(--surface) !important; color:var(--text) !important;
+  border-color:var(--border) !important;
+}
+.leaflet-bar a:hover{ background:var(--hover) !important; }
+
+@media (min-width:768px){
+  .backdrop{ display:none; }
+  .sidebar{ box-shadow:var(--shadow); }
+}
+
+@media (max-width:400px){
+  .topbar__title{ font-size:.92rem; }
+  .chip{ font-size:.76rem; padding:7px 9px; }
+  .chip__count{ font-size:.68rem; }
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{ animation-duration:.001ms !important; transition-duration:.001ms !important; }
+}
+</style>
 </head>
 <body>
 
-  <div class="top-bar">
-    <h1>Mendoza OpenData <i class="fa-solid fa-server"></i></h1>
-    <div class="status" id="api-status" style="color: #1976d2;">
-      <i class="fa-solid fa-spinner fa-spin"></i> Conectando...
-    </div>
-  </div>
-
-  <button class="fab-location" onclick="locateUser()">
-    <i class="fa-solid fa-location-crosshairs"></i>
+<!-- Topbar -->
+<header class="topbar">
+  <button class="icon-btn" id="menu-btn" type="button" aria-label="Abrir panel" title="Panel de estaciones">
+    <i class="fa-solid fa-bars"></i>
   </button>
+  <h1 class="topbar__title">
+    <i class="fa-solid fa-map-location-dot"></i> Mendoza OpenData
+  </h1>
+  <button class="icon-btn" id="fav-btn" type="button" aria-label="Favoritos" title="Solo favoritos">
+    <i class="fa-solid fa-star"></i>
+    <span class="icon-btn__badge" id="fav-badge">0</span>
+  </button>
+  <button class="icon-btn" id="theme-btn" type="button" aria-label="Modo oscuro" title="Modo oscuro">
+    <i class="fa-solid fa-moon"></i>
+  </button>
+  <button class="icon-btn" id="refresh-btn" type="button" aria-label="Recargar" title="Recargar datos">
+    <i class="fa-solid fa-rotate"></i>
+  </button>
+</header>
 
-  <div id="map"></div>
+<!-- Filtros flotantes -->
+<div class="filterbar">
+  <label class="chip chip--bike is-on">
+    <input type="checkbox" data-type="bike" checked>
+    <i class="fa-solid fa-bicycle"></i> Bicis
+    <span class="chip__count" id="count-bike">0</span>
+  </label>
+  <label class="chip chip--tram is-on">
+    <input type="checkbox" data-type="tram" checked>
+    <i class="fa-solid fa-train-tram"></i> Tranvías
+    <span class="chip__count" id="count-tram">0</span>
+  </label>
+</div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Botón ubicación -->
+<button class="fab" id="locate-btn" type="button" aria-label="Mi ubicación" title="Centrar en mi ubicación">
+  <i class="fa-solid fa-location-crosshairs"></i>
+</button>
 
-  <script>
-    // 1. Inicializar Mapa (Centrado en el Gran Mendoza / Maipú)
-    const map = L.map('map', { zoomControl: false }).setView([-32.930, -68.820], 12);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap'
-    }).addTo(map);
-    L.control.zoom({ position: 'bottomleft' }).addTo(map);
+<!-- Backdrop (móvil) -->
+<div class="backdrop" id="backdrop"></div>
 
-    const layers = {
-      bike: L.layerGroup().addTo(map),
-      tram: L.layerGroup().addTo(map)
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar" aria-label="Lista de estaciones">
+  <div class="sidebar__scroll">
+
+    <div class="sidebar__section">
+      <label class="sidebar__label" for="search-input">Buscar</label>
+      <div class="search-wrap">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="search" id="search-input" class="search-input"
+               placeholder="Nombre, operador o red…" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="sidebar__section">
+      <label class="sidebar__label" for="radius-input">Radio desde tu ubicación</label>
+      <div class="range-row">
+        <strong id="radius-value">Sin límite</strong>
+      </div>
+      <input type="range" id="radius-input" min="0" max="20" step="0.5" value="0">
+      <div class="sidebar__row" style="margin-top:10px;">
+        <select id="sort-select" aria-label="Ordenar por">
+          <option value="distance">Cercanía</option>
+          <option value="name">Nombre (A-Z)</option>
+          <option value="type">Tipo</option>
+          <option value="fav">Favoritos primero</option>
+        </select>
+        <button class="clear-btn" id="clear-btn" type="button" title="Limpiar filtros">
+          <i class="fa-solid fa-broom"></i> Limpiar
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar__section" style="padding-top:10px;padding-bottom:10px;">
+      <span class="sidebar__label" id="list-count" style="margin:0;">0 estaciones</span>
+    </div>
+
+    <ul class="station-list" id="station-list"></ul>
+
+  </div>
+</aside>
+
+<!-- Mapa -->
+<div id="map"></div>
+
+<!-- Toast -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ==========================================================
+     1. CONFIGURACIÓN
+     ========================================================== */
+  const CONFIG = {
+    center: [-32.930, -68.820],
+    zoom: 12,
+    bbox: '-33.05,-68.95,-32.80,-68.70',
+    timeoutMs: 15000,
+    cacheKey: 'mendoza-transit:v1',
+    cacheTtlMs: 15 * 60 * 1000,
+    favKey: 'mendoza-favs:v1',
+    themeKey: 'mendoza-theme:v1',
+    autoRefreshMs: 5 * 60 * 1000,
+    endpoints: [
+      'https://overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter',
+      'https://overpass.private.coffee/api/interpreter'
+    ],
+    tileLight: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    tileDark:  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> · &copy; CARTO'
+  };
+
+  /* Datos semilla (siempre visibles, se reemplazan si la API responde) */
+  const SEED_ITEMS = [
+    { id:'s/b1', osmType:'node', osmId:1, type:'bike', lat:-32.8895, lon:-68.8458,
+      name:'BiciMendoza - Parque Central', tags:{ operator:'BiciMendoza', capacity:'24', network:'BiciMendoza' } },
+    { id:'s/b2', osmType:'node', osmId:2, type:'bike', lat:-32.8907, lon:-68.8395,
+      name:'BiciMendoza - Peatonal Sarmiento', tags:{ operator:'BiciMendoza', capacity:'16' } },
+    { id:'s/b3', osmType:'node', osmId:3, type:'bike', lat:-32.8935, lon:-68.8555,
+      name:'BiciMendoza - Parque San Martín', tags:{ operator:'BiciMendoza', capacity:'20' } },
+    { id:'s/b4', osmType:'node', osmId:4, type:'bike', lat:-32.8830, lon:-68.8360,
+      name:'BiciMendoza - Ciudad Universitaria', tags:{ operator:'BiciMendoza', capacity:'18' } },
+    { id:'s/b5', osmType:'node', osmId:5, type:'bike', lat:-32.8985, lon:-68.8290,
+      name:'BiciMendoza - Terminal de Ómnibus', tags:{ operator:'BiciMendoza', capacity:'22' } },
+    { id:'s/b6', osmType:'node', osmId:6, type:'bike', lat:-33.0022, lon:-68.7825,
+      name:'BiciMendoza - Maipú Centro', tags:{ operator:'BiciMendoza', capacity:'14' } },
+    { id:'s/b7', osmType:'node', osmId:7, type:'bike', lat:-32.9130, lon:-68.8420,
+      name:'BiciMendoza - Hospital Central', tags:{ operator:'BiciMendoza', capacity:'12' } },
+
+    { id:'s/t1', osmType:'node', osmId:101, type:'tram', lat:-32.8905, lon:-68.8540,
+      name:'Metrotranvía - Estación Central', tags:{ operator:'Metrotranvía Mendoza', network:'Metrotranvía' } },
+    { id:'s/t2', osmType:'node', osmId:102, type:'tram', lat:-32.8872, lon:-68.8470,
+      name:'Metrotranvía - Pedro Molina', tags:{ operator:'Metrotranvía Mendoza' } },
+    { id:'s/t3', osmType:'node', osmId:103, type:'tram', lat:-32.8850, lon:-68.8390,
+      name:'Metrotranvía - 9 de Julio', tags:{ operator:'Metrotranvía Mendoza' } },
+    { id:'s/t4', osmType:'node', osmId:104, type:'tram', lat:-32.8830, lon:-68.8310,
+      name:'Metrotranvía - Pellegrini', tags:{ operator:'Metrotranvía Mendoza' } },
+    { id:'s/t5', osmType:'node', osmId:105, type:'tram', lat:-32.8805, lon:-68.8220,
+      name:'Metrotranvía - San Martín', tags:{ operator:'Metrotranvía Mendoza' } },
+    { id:'s/t6', osmType:'node', osmId:106, type:'tram', lat:-32.9050, lon:-68.8010,
+      name:'Metrotranvía - Godoy Cruz', tags:{ operator:'Metrotranvía Mendoza' } },
+    { id:'s/t7', osmType:'node', osmId:107, type:'tram', lat:-32.9180, lon:-68.7890,
+      name:'Metrotranvía - Luzuriaga', tags:{ operator:'Metrotranvía Mendoza' } },
+    { id:'s/t8', osmType:'node', osmId:108, type:'tram', lat:-32.9310, lon:-68.7770,
+      name:'Metrotranvía - Maipú', tags:{ operator:'Metrotranvía Mendoza' } },
+    { id:'s/t9', osmType:'node', osmId:109, type:'tram', lat:-32.9580, lon:-68.7580,
+      name:'Metrotranvía - Gutiérrez', tags:{ operator:'Metrotranvía Mendoza' } },
+    { id:'s/t10', osmType:'node', osmId:110, type:'tram', lat:-32.9840, lon:-68.7350,
+      name:'Metrotranvía - Rodeo del Medio', tags:{ operator:'Metrotranvía Mendoza' } }
+  ];
+
+  /* ==========================================================
+     2. ESTADO
+     ========================================================== */
+  const state = {
+    items: [],
+    visible: [],
+    favorites: loadFavorites(),
+    userLatLng: null,
+    userMarker: null,
+    userAccuracy: null,
+    routeLine: null,
+    radiusCircle: null,
+    activeId: null,
+    filters: { bike: true, tram: true, onlyFavs: false, search: '', radiusKm: 0, sort: 'distance' },
+    loading: false,
+    theme: localStorage.getItem(CONFIG.themeKey) || 'light'
+  };
+
+  /* ==========================================================
+     3. REFERENCIAS DOM
+     ========================================================== */
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    map: $('map'),
+    sidebar: $('sidebar'),
+    backdrop: $('backdrop'),
+    menuBtn: $('menu-btn'),
+    favBtn: $('fav-btn'),
+    favBadge: $('fav-badge'),
+    themeBtn: $('theme-btn'),
+    refreshBtn: $('refresh-btn'),
+    locateBtn: $('locate-btn'),
+    searchInput: $('search-input'),
+    radiusInput: $('radius-input'),
+    radiusValue: $('radius-value'),
+    sortSelect: $('sort-select'),
+    clearBtn: $('clear-btn'),
+    stationList: $('station-list'),
+    listCount: $('list-count'),
+    countBike: $('count-bike'),
+    countTram: $('count-tram'),
+    toast: $('toast')
+  };
+
+  /* ==========================================================
+     4. UTILIDADES
+     ========================================================== */
+  const ESC_MAP = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ESC_MAP[c]);
+  const fmtKm = (m) => Number.isFinite(m) ? (m < 1000 ? `${Math.round(m)} m` : `${(m/1000).toFixed(1)} km`) : '—';
+  const timeAgo = (ts) => {
+    const s = Math.round((Date.now() - ts) / 1000);
+    if (s < 60) return 'recién';
+    const m = Math.round(s / 60);
+    if (m < 60) return `hace ${m} min`;
+    return `hace ${Math.round(m / 60)} h`;
+  };
+
+  function loadFavorites() {
+    try { return new Set(JSON.parse(localStorage.getItem(CONFIG.favKey) || '[]')); }
+    catch { return new Set(); }
+  }
+  function saveFavorites() {
+    try { localStorage.setItem(CONFIG.favKey, JSON.stringify([...state.favorites])); } catch {}
+  }
+  function toggleFav(id) {
+    if (state.favorites.has(id)) state.favorites.delete(id);
+    else state.favorites.add(id);
+    saveFavorites();
+    updateFavBadge();
+    updateMarkersFav();
+    applyFilters();
+  }
+  function updateFavBadge() {
+    const n = state.favorites.size;
+    els.favBadge.textContent = n;
+    els.favBadge.classList.toggle('is-on', n > 0);
+  }
+
+  let toastTimer;
+  function toast(msg, icon = 'fa-circle-info') {
+    els.toast.innerHTML = `<i class="fa-solid ${icon}"></i> ${esc(msg)}`;
+    els.toast.classList.add('is-on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => els.toast.classList.remove('is-on'), 2200);
+  }
+
+  /* ==========================================================
+     5. TEMA
+     ========================================================== */
+  let tileLayer;
+
+  function applyTheme() {
+    document.documentElement.setAttribute('data-theme', state.theme);
+    const icon = els.themeBtn.querySelector('i');
+    icon.className = state.theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+
+    if (tileLayer) map.removeLayer(tileLayer);
+    tileLayer = L.tileLayer(
+      state.theme === 'dark' ? CONFIG.tileDark : CONFIG.tileLight,
+      { maxZoom: 19, attribution: CONFIG.attribution }
+    ).addTo(map).bringToBack();
+
+    document.querySelector('meta[name="theme-color"]')
+      .setAttribute('content', state.theme === 'dark' ? '#0f172a' : '#2e7d32');
+  }
+
+  function toggleTheme() {
+    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem(CONFIG.themeKey, state.theme);
+    applyTheme();
+  }
+
+  /* ==========================================================
+     6. MAPA
+     ========================================================== */
+  const map = L.map('map', {
+    zoomControl: false, preferCanvas: true, worldCopyJump: true
+  }).setView(CONFIG.center, CONFIG.zoom);
+
+  L.control.zoom({ position: 'bottomleft' }).addTo(map);
+  L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map);
+
+  /* ==========================================================
+     7. ICONOS / CLUSTERS
+     ========================================================== */
+  function pinIcon(type, isFav) {
+    return L.divIcon({
+      html: `<div class="pin pin--${type}${isFav ? ' pin--fav' : ''}"><i class="fa-solid ${type==='bike'?'fa-bicycle':'fa-train-tram'}"></i></div>`,
+      className: '', iconSize: [30,30], iconAnchor: [15,15], popupAnchor: [0,-16]
+    });
+  }
+
+  function makeClusterIcon(type) {
+    return (cluster) => {
+      const count = cluster.getChildCount();
+      const size = count < 10 ? 34 : count < 100 ? 40 : 46;
+      return L.divIcon({
+        html: `<div class="cluster cluster--${type}">${count}</div>`,
+        className: 'cluster-wrap',
+        iconSize: L.point(size, size)
+      });
     };
+  }
 
-    const bikeIcon = L.divIcon({ html: `<div class="custom-icon icon-bike"><i class="fa-solid fa-bicycle"></i></div>`, className: '', iconSize: [30, 30] });
-    const tramIcon = L.divIcon({ html: `<div class="custom-icon icon-tram"><i class="fa-solid fa-train-tram"></i></div>`, className: '', iconSize: [30, 30] });
+  const clusters = {
+    bike: L.markerClusterGroup({
+      maxClusterRadius: 55, showCoverageOnHover: false,
+      spiderfyOnMaxZoom: true, removeOutsideVisibleBounds: true,
+      iconCreateFunction: makeClusterIcon('bike')
+    }),
+    tram: L.markerClusterGroup({
+      maxClusterRadius: 55, showCoverageOnHover: false,
+      spiderfyOnMaxZoom: true, removeOutsideVisibleBounds: true,
+      iconCreateFunction: makeClusterIcon('tram')
+    })
+  };
 
-    // 2. CONEXIÓN A API REAL CON MÉTODO POST (Más seguro)
-    async function fetchRealMendozaData() {
-      const statusEl = document.getElementById('api-status');
-      
-      const query = `
-        [out:json][timeout:25];
-        (
-          node["amenity"="bicycle_rental"](-33.05,-68.95,-32.80,-68.70);
-          node["railway"="tram_stop"](-33.05,-68.95,-32.80,-68.70);
-        );
-        out body;
-      `;
+  map.addLayer(clusters.bike);
+  map.addLayer(clusters.tram);
 
-      try {
-        // Usamos POST en lugar de GET para evitar que el navegador rompa la URL
-        const response = await fetch('https://overpass-api.de/api/interpreter', {
-          method: 'POST',
-          body: "data=" + encodeURIComponent(query),
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
-        });
+  /* ==========================================================
+     8. POPUPS
+     ========================================================== */
+  function popupHtml(item) {
+    const t = item.tags;
+    const isBike = item.type === 'bike';
+    const isFav = state.favorites.has(item.id);
+    const rows = [];
 
-        if (!response.ok) {
-          throw new Error(`Error del servidor: ${response.status}`);
-        }
+    const addr = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(' ').trim();
+    if (addr)             rows.push(['Dirección', esc(addr)]);
+    if (t.operator)       rows.push(['Operador',  esc(t.operator)]);
+    if (t.network)        rows.push(['Red',       esc(t.network)]);
+    if (t.capacity)       rows.push(['Capacidad', `${esc(t.capacity)} ${isBike ? 'bicis' : 'andenes'}`]);
+    if (t.opening_hours)  rows.push(['Horario',   esc(t.opening_hours)]);
+    if (t.wheelchair) {
+      const w = t.wheelchair;
+      const label = w === 'yes' ? '♿ Sí' : w === 'limited' ? '♿ Parcial' : '✖ No';
+      rows.push(['Accesible', label]);
+    }
+    if (t.website)        rows.push(['Sitio', `<a href="${esc(t.website)}" target="_blank" rel="noopener noreferrer">Abrir</a>`]);
 
-        const data = await response.json();
+    if (state.userLatLng) {
+      rows.push(['A tu ubicación', fmtKm(map.distance([item.lat,item.lon], state.userLatLng))]);
+    }
+    rows.push(['Coords', `${item.lat.toFixed(5)}, ${item.lon.toFixed(5)}`]);
 
-        let bikeCount = 0;
-        let tramCount = 0;
+    const body = rows.map(([k,v]) =>
+      `<div class="popup__row"><span class="popup__key">${k}</span><span class="popup__val">${v}</span></div>`
+    ).join('');
 
-        data.elements.forEach(element => {
-          const lat = element.lat;
-          const lon = element.lon;
-          const tags = element.tags || {};
-          const name = tags.name || "Punto sin nombre";
+    const dirUrl = `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lon}`;
+    const osmUrl = `https://www.openstreetmap.org/${item.osmType}/${item.osmId}`;
 
-          if (tags.amenity === "bicycle_rental") {
-            const marker = L.marker([lat, lon], { icon: bikeIcon });
-            marker.bindPopup(`<div class="popup-title">🚲 ${name}</div>`);
-            layers.bike.addLayer(marker);
-            bikeCount++;
-          } else if (tags.railway === "tram_stop") {
-            const marker = L.marker([lat, lon], { icon: tramIcon });
-            marker.bindPopup(`<div class="popup-title">🚋 ${name}</div>`);
-            layers.tram.addLayer(marker);
-            tramCount++;
-          }
-        });
+    return `
+      <div class="popup">
+        <div class="popup__head popup__head--${isBike ? 'bike' : 'tram'}">
+          <i class="fa-solid ${isBike ? 'fa-bicycle' : 'fa-train-tram'}"></i>
+          <span>${esc(item.name)}</span>
+          <button class="popup__fav${isFav ? ' is-on' : ''}" data-fav="${esc(item.id)}"
+                  aria-label="Favorito" title="Favorito">
+            <i class="fa-solid fa-star"></i>
+          </button>
+        </div>
+        <div class="popup__body">${body}</div>
+        <div class="popup__actions">
+          <button data-route="${esc(item.id)}"><i class="fa-solid fa-route"></i> Ruta</button>
+          <button data-share="${esc(item.id)}"><i class="fa-solid fa-share-nodes"></i> Compartir</button>
+          <a href="${dirUrl}" target="_blank" rel="noopener noreferrer">
+            <i class="fa-solid fa-diamond-turn-right"></i> Ir
+          </a>
+        </div>
+      </div>`;
+  }
 
-        if (bikeCount === 0 && tramCount === 0) {
-          statusEl.innerHTML = `<i class="fa-solid fa-circle-exclamation" style="color: orange;"></i> Conectado, pero no se hallaron datos.`;
-        } else {
-          statusEl.innerHTML = `<i class="fa-solid fa-check" style="color: green;"></i> Reales: ${bikeCount} bicis, ${tramCount} tranvías.`;
-          statusEl.style.color = "green";
-        }
+  function bindPopupEvents(marker, item) {
+    marker.on('popupopen', (e) => {
+      const popupEl = e.popup.getElement();
+      if (!popupEl) return;
 
-      } catch (error) {
-        // Mostrará el error exacto en rojo
-        statusEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Error: ${error.message}`;
-        statusEl.style.color = "red";
-        console.error(error);
+      popupEl.querySelector('[data-fav]')?.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        toggleFav(item.id);
+        const btn = ev.currentTarget;
+        btn.classList.toggle('is-on', state.favorites.has(item.id));
+      });
+      popupEl.querySelector('[data-route]')?.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        drawRouteTo(item);
+      });
+      popupEl.querySelector('[data-share]')?.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        shareStation(item);
+      });
+    });
+  }
+
+  /* ==========================================================
+     9. NORMALIZACIÓN + RENDER
+     ========================================================== */
+  function normalize(elements) {
+    const items = [], seen = new Set();
+    for (const el of elements) {
+      const lat = typeof el.lat === 'number' ? el.lat : el.center?.lat;
+      const lon = typeof el.lon === 'number' ? el.lon : el.center?.lon;
+      if (typeof lat !== 'number' || typeof lon !== 'number') continue;
+
+      const tags = el.tags || {};
+      let type = null;
+      if (tags.amenity === 'bicycle_rental') type = 'bike';
+      else if (tags.railway === 'tram_stop') type = 'tram';
+      if (!type) continue;
+
+      const id = `${el.type}/${el.id}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+
+      items.push({
+        id, osmType: el.type, osmId: el.id, type, lat, lon, tags,
+        name: tags.name || (type === 'bike' ? 'Estación de bicicletas' : 'Parada de tranvía')
+      });
+    }
+    return items;
+  }
+
+  function render(items) {
+    state.items = items;
+    clusters.bike.clearLayers();
+    clusters.tram.clearLayers();
+
+    for (const item of items) {
+      const isFav = state.favorites.has(item.id);
+      const marker = L.marker([item.lat, item.lon], {
+        icon: pinIcon(item.type, isFav),
+        title: item.name, alt: item.name, keyboard: true
+      });
+      marker.__item = item;
+      marker.bindPopup(() => popupHtml(item), {
+        maxWidth: 300, minWidth: 240, autoPanPadding: [20, 90]
+      });
+      bindPopupEvents(marker, item);
+      clusters[item.type].addLayer(marker);
+    }
+
+    applyFilters();
+  }
+
+  function updateMarkersFav() {
+    Object.values(clusters).forEach((grp) => {
+      grp.eachLayer((m) => {
+        if (!m.__item) return;
+        m.setIcon(pinIcon(m.__item.type, state.favorites.has(m.__item.id)));
+      });
+    });
+  }
+
+  /* ==========================================================
+     10. FILTROS + LISTA
+     ========================================================== */
+  function computeVisible() {
+    const { bike, tram, onlyFavs, search, radiusKm } = state.filters;
+    const q = search.trim().toLowerCase();
+    const radiusM = radiusKm * 1000;
+
+    return state.items.filter((it) => {
+      if (it.type === 'bike' && !bike) return false;
+      if (it.type === 'tram' && !tram) return false;
+      if (onlyFavs && !state.favorites.has(it.id)) return false;
+      if (q) {
+        const hay = `${it.name} ${it.tags.operator || ''} ${it.tags.network || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
       }
+      if (radiusM > 0) {
+        if (!state.userLatLng) return false;
+        if (map.distance([it.lat, it.lon], state.userLatLng) > radiusM) return false;
+      }
+      return true;
+    });
+  }
+
+  function sortVisible(list) {
+    const { sort } = state.filters;
+    const byDist = (a) => state.userLatLng ? map.distance([a.lat,a.lon], state.userLatLng) : Infinity;
+
+    if (sort === 'name')  return list.sort((a,b) => a.name.localeCompare(b.name, 'es'));
+    if (sort === 'type')  return list.sort((a,b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name, 'es'));
+    if (sort === 'fav')   return list.sort((a,b) => {
+      const fa = state.favorites.has(a.id) ? 0 : 1;
+      const fb = state.favorites.has(b.id) ? 0 : 1;
+      return fa - fb || byDist(a) - byDist(b);
+    });
+    /* distance */
+    return list.sort((a,b) => byDist(a) - byDist(b));
+  }
+
+  function renderList(list) {
+    if (list.length === 0) {
+      els.stationList.innerHTML = `
+        <li class="empty-state">
+          <i class="fa-solid fa-inbox"></i>
+          No hay estaciones con los filtros actuales.
+        </li>`;
+      return;
     }
 
-    // 3. GEOLOCALIZACIÓN
-    function locateUser() {
-      map.locate({ setView: true, maxZoom: 16 });
-    }
+    els.stationList.innerHTML = list.map((it) => {
+      const isFav = state.favorites.has(it.id);
+      const distTxt = state.userLatLng
+        ? fmtKm(map.distance([it.lat, it.lon], state.userLatLng))
+        : '—';
+      const typeIcon = it.type === 'bike' ? 'fa-bicycle' : 'fa-train-tram';
+      const typeLabel = it.type === 'bike' ? 'Bici' : 'Tranvía';
+      return `
+        <li class="station-item${state.activeId === it.id ? ' is-active' : ''}" data-id="${esc(it.id)}">
+          <div class="station-item__icon station-item__icon--${it.type}">
+            <i class="fa-solid ${typeIcon}"></i>
+          </div>
+          <div class="station-item__body">
+            <div class="station-item__name">${esc(it.name)}</div>
+            <div class="station-item__meta">
+              <span><i class="fa-solid ${typeIcon}"></i> ${typeLabel}</span>
+              <span><i class="fa-solid fa-location-dot"></i> ${distTxt}</span>
+            </div>
+          </div>
+          <button class="station-item__fav${isFav ? ' is-on' : ''}" data-fav="${esc(it.id)}"
+                  aria-label="Favorito" title="Favorito">
+            <i class="fa-solid fa-star"></i>
+          </button>
+        </li>`;
+    }).join('');
+  }
 
-    map.on('locationfound', function(e) {
-      L.circleMarker(e.latlng, { radius: 8, fillColor: "#1976d2", color: "#fff", weight: 3, fillOpacity: 1 })
-       .addTo(map).bindPopup("Tu ubicación").openPopup();
+  function applyFilters() {
+    const visible = computeVisible();
+    sortVisible(visible);
+    state.visible = visible;
+    renderList(visible);
+
+    /* Actualizar contadores de chips (según tipo, sin otros filtros) */
+    els.countBike.textContent = state.items.filter(i => i.type === 'bike').length;
+    els.countTram.textContent = state.items.filter(i => i.type === 'tram').length;
+    els.listCount.textContent = `${visible.length} estación${visible.length === 1 ? '' : 'es'}`;
+
+    /* Visibilidad de clusters */
+    if (state.filters.bike) map.addLayer(clusters.bike); else map.removeLayer(clusters.bike);
+    if (state.filters.tram) map.addLayer(clusters.tram); else map.removeLayer(clusters.tram);
+  }
+
+  /* ==========================================================
+     11. INTERACCIÓN CON LA LISTA
+     ========================================================== */
+  els.stationList.addEventListener('click', (e) => {
+    const favBtn = e.target.closest('[data-fav]');
+    if (favBtn) {
+      e.stopPropagation();
+      toggleFav(favBtn.dataset.fav);
+      return;
+    }
+    const li = e.target.closest('.station-item');
+    if (!li) return;
+    selectStation(li.dataset.id);
+  });
+
+  function selectStation(id) {
+    const item = state.items.find((i) => i.id === id);
+    if (!item) return;
+
+    state.activeId = id;
+    /* Refrescar estado activo en la lista */
+    document.querySelectorAll('.station-item').forEach((n) =>
+      n.classList.toggle('is-active', n.dataset.id === id)
+    );
+
+    map.flyTo([item.lat, item.lon], Math.max(map.getZoom(), 16), { duration: .6 });
+
+    /* Abrir popup del marker correspondiente */
+    clusters[item.type].eachLayer((m) => {
+      if (m.__item && m.__item.id === id) {
+        const grp = clusters[item.type];
+        grp.zoomToShowLayer(m, () => m.openPopup());
+      }
     });
 
-    fetchRealMendozaData();
-  </script>
+    /* Cerrar sidebar en móvil */
+    if (window.matchMedia('(max-width: 767px)').matches) closeSidebar();
+  }
+
+  /* ==========================================================
+     12. RUTA VISUAL
+     ========================================================== */
+  function drawRouteTo(item) {
+    if (!state.userLatLng) {
+      toast('Activá tu ubicación para trazar la ruta', 'fa-triangle-exclamation');
+      return;
+    }
+    if (state.routeLine) map.removeLayer(state.routeLine);
+
+    state.routeLine = L.polyline(
+      [state.userLatLng, [item.lat, item.lon]],
+      {
+        color: '#1976d2', weight: 3, opacity: .85,
+        dashArray: '6 8', lineCap: 'round'
+      }
+    ).addTo(map);
+
+    const d = map.distance(state.userLatLng, [item.lat, item.lon]);
+    toast(`Distancia en línea recta: ${fmtKm(d)}`, 'fa-route');
+
+    const bounds = L.latLngBounds([state.userLatLng, [item.lat, item.lon]]);
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+  }
+
+  /* ==========================================================
+     13. COMPARTIR
+     ========================================================== */
+  async function shareStation(item) {
+    const url = `https://www.openstreetmap.org/${item.osmType}/${item.osmId}`;
+    const text = `${item.name} · ${item.lat.toFixed(5)}, ${item.lon.toFixed(5)}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: item.name, text, url });
+        return;
+      }
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+      toast('Copiado al portapapeles', 'fa-clipboard-check');
+    } catch {
+      toast('No se pudo compartir', 'fa-triangle-exclamation');
+    }
+  }
+
+  /* ==========================================================
+     14. OVERPASS API
+     ========================================================== */
+  function buildQuery() {
+    return `[out:json][timeout:25];
+(
+  nwr["amenity"="bicycle_rental"](${CONFIG.bbox});
+  nwr["railway"="tram_stop"](${CONFIG.bbox});
+);
+out center;`;
+  }
+
+  async function tryEndpoint(endpoint, query) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), CONFIG.timeoutMs);
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: 'data=' + encodeURIComponent(query),
+        signal: ctrl.signal
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (!Array.isArray(json?.elements)) throw new Error('JSON sin elements');
+      return json.elements;
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  async function fetchOverpass(query) {
+    const errors = [];
+    for (const ep of CONFIG.endpoints) {
+      try { return await tryEndpoint(ep, query); }
+      catch (e) { errors.push(`${new URL(ep).host}: ${e.message}`); }
+    }
+    throw new Error(errors.join(' | '));
+  }
+
+  /* ==========================================================
+     15. CARGA
+     ========================================================== */
+  function readCache() {
+    try {
+      const raw = localStorage.getItem(CONFIG.cacheKey);
+      if (!raw) return null;
+      const p = JSON.parse(raw);
+      if (!p || !Array.isArray(p.items)) return null;
+      if (Date.now() - p.ts > CONFIG.cacheTtlMs) return null;
+      return p;
+    } catch { return null; }
+  }
+  function writeCache(items) {
+    try { localStorage.setItem(CONFIG.cacheKey, JSON.stringify({ ts: Date.now(), items })); } catch {}
+  }
+
+  async function loadData({ force = false } = {}) {
+    if (state.loading) return;
+    state.loading = true;
+    els.refreshBtn.classList.add('is-loading');
+    els.refreshBtn.disabled = true;
+
+    /* 1) Semilla instantánea */
+    if (state.items.length === 0) render(SEED_ITEMS);
+
+    const cached = force ? null : readCache();
+    if (cached) {
+      render(cached.items);
+      toast(`Datos guardados ${timeAgo(cached.ts)}`, 'fa-clock-rotate-left');
+    }
+
+    try {
+      const elements = await fetchOverpass(buildQuery());
+      const items = normalize(elements);
+
+      if (items.length === 0) {
+        toast('La API no devolvió datos · usando ejemplo', 'fa-triangle-exclamation');
+        return;
+      }
+
+      render(items);
+      writeCache(items);
+      toast(`Actualizado: ${items.length} estaciones`, 'fa-circle-check');
+    } catch (err) {
+      console.warn('[loadData]', err.message);
+      toast('API no accesible · datos de ejemplo', 'fa-wifi');
+    } finally {
+      state.loading = false;
+      els.refreshBtn.classList.remove('is-loading');
+      els.refreshBtn.disabled = false;
+    }
+  }
+
+  /* ==========================================================
+     16. GEOLOCALIZACIÓN
+     ========================================================== */
+  function locateUser() {
+    if (!('geolocation' in navigator)) {
+      toast('Geolocalización no soportada', 'fa-triangle-exclamation');
+      return;
+    }
+    els.locateBtn.classList.add('is-locating');
+    map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true, timeout: 12000 });
+  }
+
+  function updateRadiusCircle() {
+    if (!state.userLatLng || state.filters.radiusKm <= 0) {
+      if (state.radiusCircle) { map.removeLayer(state.radiusCircle); state.radiusCircle = null; }
+      return;
+    }
+    const r = state.filters.radiusKm * 1000;
+    if (state.radiusCircle) {
+      state.radiusCircle.setLatLng(state.userLatLng).setRadius(r);
+    } else {
+      state.radiusCircle = L.circle(state.userLatLng, {
+        radius: r, color: '#1976d2', weight: 2,
+        fillColor: '#1976d2', fillOpacity: .08,
+        dashArray: '4 6', interactive: false
+      }).addTo(map);
+    }
+  }
+
+  map.on('locationfound', (e) => {
+    els.locateBtn.classList.remove('is-locating');
+    state.userLatLng = e.latlng;
+
+    if (state.userMarker) {
+      state.userMarker.setLatLng(e.latlng);
+      state.userAccuracy.setLatLng(e.latlng).setRadius(e.accuracy);
+    } else {
+      state.userAccuracy = L.circle(e.latlng, {
+        radius: e.accuracy, color: '#1976d2', weight: 1,
+        fillColor: '#1976d2', fillOpacity: .12, interactive: false
+      }).addTo(map);
+      state.userMarker = L.circleMarker(e.latlng, {
+        radius: 8, color: '#fff', weight: 3,
+        fillColor: '#1976d2', fillOpacity: 1
+      }).addTo(map).bindPopup('<b>Estás aquí</b>');
+    }
+    state.userMarker.openPopup();
+
+    updateRadiusCircle();
+    applyFilters();
+    toast(`Ubicación detectada (±${Math.round(e.accuracy)} m)`, 'fa-location-dot');
+  });
+
+  map.on('locationerror', (e) => {
+    els.locateBtn.classList.remove('is-locating');
+    toast(e.message || 'No se pudo obtener ubicación', 'fa-triangle-exclamation');
+  });
+
+  /* ==========================================================
+     17. SIDEBAR
+     ========================================================== */
+  function openSidebar() {
+    els.sidebar.classList.add('is-open');
+    els.backdrop.classList.add('is-on');
+  }
+  function closeSidebar() {
+    els.sidebar.classList.remove('is-open');
+    els.backdrop.classList.remove('is-on');
+  }
+  function toggleSidebar() {
+    els.sidebar.classList.contains('is-open') ? closeSidebar() : openSidebar();
+  }
+
+  /* ==========================================================
+     18. EVENTOS DE UI
+     ========================================================== */
+  els.menuBtn.addEventListener('click', toggleSidebar);
+  els.backdrop.addEventListener('click', closeSidebar);
+  els.themeBtn.addEventListener('click', toggleTheme);
+  els.refreshBtn.addEventListener('click', () => loadData({ force: true }));
+  els.locateBtn.addEventListener('click', locateUser);
+
+  /* Filtros de tipo */
+  document.querySelectorAll('.chip input[data-type]').forEach((input) => {
+    input.addEventListener('change', () => {
+      const type = input.dataset.type;
+      state.filters[type] = input.checked;
+      input.closest('.chip').classList.toggle('is-on', input.checked);
+      applyFilters();
+    });
+  });
+
+  /* Solo favoritos */
+  els.favBtn.addEventListener('click', () => {
+    state.filters.onlyFavs = !state.filters.onlyFavs;
+    els.favBtn.style.color = state.filters.onlyFavs ? 'var(--amber)' : '';
+    if (state.filters.onlyFavs) openSidebar();
+    applyFilters();
+  });
+
+  /* Búsqueda con debounce */
+  let searchTimer;
+  els.searchInput.addEventListener('input', (e) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      state.filters.search = e.target.value;
+      applyFilters();
+    }, 150);
+  });
+
+  /* Radio */
+  els.radiusInput.addEventListener('input', (e) => {
+    const km = parseFloat(e.target.value);
+    state.filters.radiusKm = km;
+    els.radiusValue.textContent = km === 0 ? 'Sin límite' : `${km.toFixed(1)} km`;
+    updateRadiusCircle();
+    applyFilters();
+  });
+
+  /* Ordenar */
+  els.sortSelect.addEventListener('change', (e) => {
+    state.filters.sort = e.target.value;
+    applyFilters();
+  });
+
+  /* Limpiar */
+  els.clearBtn.addEventListener('click', () => {
+    state.filters.search = '';
+    state.filters.radiusKm = 0;
+    state.filters.onlyFavs = false;
+    state.filters.bike = true;
+    state.filters.tram = true;
+
+    els.searchInput.value = '';
+    els.radiusInput.value = 0;
+    els.radiusValue.textContent = 'Sin límite';
+    els.favBtn.style.color = '';
+
+    document.querySelectorAll('.chip input[data-type]').forEach((inp) => {
+      inp.checked = true;
+      inp.closest('.chip').classList.add('is-on');
+    });
+
+    if (state.radiusCircle) { map.removeLayer(state.radiusCircle); state.radiusCircle = null; }
+    if (state.routeLine)   { map.removeLayer(state.routeLine);   state.routeLine = null; }
+
+    applyFilters();
+    toast('Filtros limpiados', 'fa-broom');
+  });
+
+  /* Atajos de teclado */
+  document.addEventListener('keydown', (e) => {
+    if (e.target.matches('input, textarea, select')) return;
+    if (e.key === 'Escape')     closeSidebar();
+    if (e.key === 'l' || e.key === 'L') locateUser();
+    if (e.key === 'r' || e.key === 'R') loadData({ force: true });
+    if (e.key === '/') { e.preventDefault(); openSidebar(); els.searchInput.focus(); }
+  });
+
+  window.addEventListener('offline', () => toast('Sin conexión a Internet', 'fa-wifi'));
+  window.addEventListener('online',  () => loadData({ force: true }));
+
+  /* Auto-refresh silencioso */
+  setInterval(() => {
+    if (!state.loading && navigator.onLine) loadData();
+  }, CONFIG.autoRefreshMs);
+
+  /* ==========================================================
+     19. ARRANQUE
+     ========================================================== */
+  applyTheme();
+  updateFavBadge();
+  els.radiusValue.textContent = 'Sin límite';
+  loadData();
+})();
+</script>
 </body>
 </html>
