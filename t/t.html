@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es" data-theme="light">
 <head>
 <meta charset="UTF-8">
@@ -11,7 +11,7 @@
 
 <style>
 :root{
-  --primary:#2e7d32; --tram:#d32f2f; --blue:#1976d2; --amber:#f59e0b;
+  --primary:#2e7d32; --tram:#d32f2f; --bus:#e65100; --blue:#1976d2; --amber:#f59e0b;
   --text:#1f2933; --muted:#64748b; --bg:#f8fafc; --surface:#fff;
   --border:#e2e8f0; --hover:#f1f5f9;
 }
@@ -29,7 +29,6 @@ body{
 }
 #map{ position:absolute; inset:0; z-index:1; background:var(--bg); }
 
-/* Topbar */
 .topbar{
   position:absolute; top:0; left:0; right:0;
   padding:calc(10px + env(safe-area-inset-top)) 12px 10px;
@@ -53,17 +52,19 @@ body{
 .icon-btn.is-loading i{ animation:spin 1s linear infinite; }
 @keyframes spin{ to{ transform:rotate(360deg); } }
 
-/* Filtros */
 .filterbar{
   position:absolute; top:calc(64px + env(safe-area-inset-top));
-  left:12px; display:flex; gap:8px; z-index:1050;
+  left:12px; right:12px; display:flex; gap:8px; z-index:1050;
+  overflow-x:auto; padding-bottom:2px;
+  -webkit-overflow-scrolling:touch;
 }
+.filterbar::-webkit-scrollbar{ display:none; }
 .chip{
   display:flex; align-items:center; gap:6px;
   padding:7px 11px; background:var(--surface);
   border:1.5px solid var(--border); border-radius:10px;
   color:var(--muted); font-size:.8rem; font-weight:600;
-  cursor:pointer; user-select:none;
+  cursor:pointer; user-select:none; flex:0 0 auto;
   box-shadow:0 2px 6px rgba(0,0,0,.1);
 }
 .chip input{ display:none; }
@@ -73,10 +74,11 @@ body{
 }
 .chip--bike.is-on{ border-color:var(--primary); background:#e8f5e9; color:var(--primary); }
 .chip--tram.is-on{ border-color:var(--tram); background:#ffebee; color:var(--tram); }
+.chip--bus.is-on { border-color:var(--bus);  background:#fff3e0; color:var(--bus); }
 [data-theme="dark"] .chip--bike.is-on{ background:#1b3a1e; color:#a5d6a7; }
 [data-theme="dark"] .chip--tram.is-on{ background:#4a1c1c; color:#ef9a9a; }
+[data-theme="dark"] .chip--bus.is-on { background:#3e1f00; color:#ffb74d; }
 
-/* Estado */
 .statusbar{
   position:absolute; bottom:calc(20px + env(safe-area-inset-bottom));
   left:12px; right:80px;
@@ -95,7 +97,6 @@ body{
 [data-theme="dark"] .statusbar.warn{ background:#3a2e0d; color:#fcd34d; }
 [data-theme="dark"] .statusbar.err{ background:#3a1a1a; color:#ef9a9a; }
 
-/* Botón ubicación */
 .fab{
   position:absolute; right:16px;
   bottom:calc(20px + env(safe-area-inset-bottom));
@@ -107,7 +108,6 @@ body{
 .fab:active{ transform:scale(.9); }
 .fab.is-locating i{ animation:spin 1s linear infinite; }
 
-/* Marcadores */
 .pin{
   width:30px; height:30px; display:grid; place-items:center;
   border:2.5px solid #fff; border-radius:50%;
@@ -116,8 +116,8 @@ body{
 }
 .pin--bike{ background:var(--primary); }
 .pin--tram{ background:var(--tram); }
+.pin--bus { background:var(--bus); }
 
-/* Popups */
 .leaflet-popup-content-wrapper{
   border-radius:12px; padding:0; overflow:hidden;
   background:var(--surface); color:var(--text);
@@ -130,6 +130,7 @@ body{
 }
 .popup-head--bike{ background:var(--primary); }
 .popup-head--tram{ background:var(--tram); }
+.popup-head--bus { background:var(--bus); }
 .popup-body{ padding:8px 12px; font-size:.78rem; }
 .popup-body .row{ display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
 .popup-body .k{ color:var(--muted); }
@@ -142,7 +143,6 @@ body{
   text-decoration:none;
 }
 
-/* Error overlay */
 #fatal-error{
   position:fixed; inset:0; z-index:9999;
   background:#fee2e2; color:#991b1b;
@@ -171,6 +171,11 @@ body{
     <i class="fa-solid fa-train-tram"></i> Tranvías
     <span class="chip__count" id="count-tram">0</span>
   </label>
+  <label class="chip chip--bus is-on">
+    <input type="checkbox" data-type="bus" checked>
+    <i class="fa-solid fa-bus"></i> Micros
+    <span class="chip__count" id="count-bus">0</span>
+  </label>
 </div>
 
 <div class="statusbar" id="statusbar">
@@ -185,7 +190,6 @@ body{
 <div id="map"></div>
 <div id="fatal-error"></div>
 
-<!-- Leaflet con fallback de CDN -->
 <script>
 window.__leafletLoaded = false;
 </script>
@@ -197,7 +201,7 @@ function loadLeafletFallback(){
   var s = document.createElement('script');
   s.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
   s.onload = function(){ window.__leafletLoaded = true; boot(); };
-  s.onerror = function(){ showFatal('No se pudo cargar Leaflet desde ninguna CDN. Verificá tu conexión.'); };
+  s.onerror = function(){ showFatal('No se pudo cargar Leaflet desde ninguna CDN.'); };
   document.head.appendChild(s);
 }
 function showFatal(msg){
@@ -205,22 +209,14 @@ function showFatal(msg){
   el.style.display = 'block';
   el.textContent = '⚠️ Error crítico:\n\n' + msg;
 }
-window.addEventListener('error', function(e){
-  console.error('Error global:', e.error || e.message);
-});
+window.addEventListener('error', function(e){ console.error('Error global:', e.error || e.message); });
 </script>
 
 <script>
-/* ============================================================
-   TODO EL CÓDIGO PRINCIPAL — envuelto para que NUNCA rompa
-   ============================================================ */
 function boot(){
-  if (typeof L === 'undefined') {
-    showFatal('Leaflet no está disponible.');
-    return;
-  }
+  if (typeof L === 'undefined') { showFatal('Leaflet no está disponible.'); return; }
 
-  /* -------- Almacén seguro (nunca tira excepción) -------- */
+  /* -------- Almacén seguro -------- */
   var store = (function(){
     var mem = {};
     var ok = false;
@@ -241,7 +237,6 @@ function boot(){
     };
   })();
 
-  /* -------- Configuración -------- */
   var CFG = {
     center: [-32.930, -68.820],
     zoom: 12,
@@ -257,8 +252,11 @@ function boot(){
     ]
   };
 
-  /* -------- Datos semilla (siempre visibles) -------- */
+  /* ============================================================
+     DATOS SEMILLA — incluye micros
+     ============================================================ */
   var SEED = [
+    /* --- Bicis --- */
     { id:'s/b1', type:'bike', lat:-32.8895, lon:-68.8458, name:'BiciMendoza - Parque Central',
       tags:{ operator:'BiciMendoza', capacity:'24' } },
     { id:'s/b2', type:'bike', lat:-32.8907, lon:-68.8395, name:'BiciMendoza - Peatonal Sarmiento',
@@ -273,6 +271,8 @@ function boot(){
       tags:{ operator:'BiciMendoza', capacity:'14' } },
     { id:'s/b7', type:'bike', lat:-32.9130, lon:-68.8420, name:'BiciMendoza - Hospital Central',
       tags:{ operator:'BiciMendoza', capacity:'12' } },
+
+    /* --- Tranvías --- */
     { id:'s/t1', type:'tram', lat:-32.8905, lon:-68.8540, name:'Metrotranvía - Estación Central',
       tags:{ operator:'Metrotranvía Mendoza' } },
     { id:'s/t2', type:'tram', lat:-32.8872, lon:-68.8470, name:'Metrotranvía - Pedro Molina',
@@ -292,13 +292,38 @@ function boot(){
     { id:'s/t9', type:'tram', lat:-32.9580, lon:-68.7580, name:'Metrotranvía - Gutiérrez',
       tags:{ operator:'Metrotranvía Mendoza' } },
     { id:'s/t10', type:'tram', lat:-32.9840, lon:-68.7350, name:'Metrotranvía - Rodeo del Medio',
-      tags:{ operator:'Metrotranvía Mendoza' } }
+      tags:{ operator:'Metrotranvía Mendoza' } },
+
+    /* --- Micros (paradas de colectivos) --- */
+    { id:'s/m1', type:'bus', lat:-32.8890, lon:-68.8440, name:'Micro - Plaza Independencia',
+      tags:{ operator:'MendoTran', route_ref:'110;120;200', network:'MendoTran' } },
+    { id:'s/m2', type:'bus', lat:-32.8915, lon:-68.8375, name:'Micro - Av. San Martín y Colón',
+      tags:{ operator:'MendoTran', route_ref:'111;201;205', network:'MendoTran' } },
+    { id:'s/m3', type:'bus', lat:-32.8860, lon:-68.8520, name:'Micro - Parque General San Martín',
+      tags:{ operator:'MendoTran', route_ref:'130;135;350', network:'MendoTran' } },
+    { id:'s/m4', type:'bus', lat:-32.8975, lon:-68.8280, name:'Micro - Terminal de Ómnibus',
+      tags:{ operator:'MendoTran', route_ref:'200;201;221', network:'MendoTran' } },
+    { id:'s/m5', type:'bus', lat:-32.9040, lon:-68.7990, name:'Micro - Godoy Cruz Centro',
+      tags:{ operator:'MendoTran', route_ref:'100;101;110', network:'MendoTran' } },
+    { id:'s/m6', type:'bus', lat:-32.9160, lon:-68.7880, name:'Micro - Luzuriaga',
+      tags:{ operator:'MendoTran', route_ref:'205;207;208', network:'MendoTran' } },
+    { id:'s/m7', type:'bus', lat:-32.8820, lon:-68.8330, name:'Micro - Ciudad Universitaria',
+      tags:{ operator:'MendoTran', route_ref:'130;221;911', network:'MendoTran' } },
+    { id:'s/m8', type:'bus', lat:-32.8730, lon:-68.8480, name:'Micro - Hospital Central',
+      tags:{ operator:'MendoTran', route_ref:'111;120;350', network:'MendoTran' } },
+    { id:'s/m9', type:'bus', lat:-32.9280, lon:-68.7780, name:'Micro - Maipú Centro',
+      tags:{ operator:'MendoTran', route_ref:'810;820;821', network:'MendoTran' } },
+    { id:'s/m10', type:'bus', lat:-32.9680, lon:-68.7480, name:'Micro - Rodeo del Medio',
+      tags:{ operator:'MendoTran', route_ref:'810;820', network:'MendoTran' } },
+    { id:'s/m11', type:'bus', lat:-32.8780, lon:-68.8620, name:'Micro - Las Heras',
+      tags:{ operator:'MendoTran', route_ref:'100;101;350', network:'MendoTran' } },
+    { id:'s/m12', type:'bus', lat:-32.8950, lon:-68.8180, name:'Micro - Guaymallén',
+      tags:{ operator:'MendoTran', route_ref:'200;201;205', network:'MendoTran' } }
   ];
 
-  /* -------- Estado -------- */
   var state = {
     items: [],
-    filters: { bike: true, tram: true },
+    filters: { bike: true, tram: true, bus: true },
     userLatLng: null,
     userMarker: null,
     userAccuracy: null,
@@ -306,15 +331,12 @@ function boot(){
     loading: false
   };
 
-  /* -------- DOM -------- */
   var $ = function(id){ return document.getElementById(id); };
   var statusBar = $('statusbar');
-  var statusText = $('status-text');
   var refreshBtn = $('refresh-btn');
   var themeBtn = $('theme-btn');
   var locateBtn = $('locate-btn');
-  var countBike = $('count-bike');
-  var countTram = $('count-tram');
+  var countEls = { bike: $('count-bike'), tram: $('count-tram'), bus: $('count-bus') };
 
   var ESC = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
   function esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){ return ESC[c]; }); }
@@ -345,14 +367,9 @@ function boot(){
       var url = state.theme === 'dark'
         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
         : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-      tileLayer = L.tileLayer(url, {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap &copy; CARTO'
-      }).addTo(map);
+      tileLayer = L.tileLayer(url, { maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
       if (tileLayer.bringToBack) tileLayer.bringToBack();
-    } catch(e) {
-      console.warn('Error cargando tiles:', e.message);
-    }
+    } catch(e) { console.warn('Error tiles:', e.message); }
   }
 
   function applyTheme(){
@@ -367,31 +384,35 @@ function boot(){
     applyTheme();
   });
 
-  /* -------- Iconos -------- */
+  /* -------- Iconos (incluye bus) -------- */
+  var ICON_MAP = {
+    bike: 'fa-bicycle',
+    tram: 'fa-train-tram',
+    bus:  'fa-bus'
+  };
+
   function pinIcon(type){
     return L.divIcon({
-      html: '<div class="pin pin--' + type + '"><i class="fa-solid ' +
-            (type === 'bike' ? 'fa-bicycle' : 'fa-train-tram') + '"></i></div>',
-      className: '',
-      iconSize: [30,30],
-      iconAnchor: [15,15],
-      popupAnchor: [0,-16]
+      html: '<div class="pin pin--' + type + '"><i class="fa-solid ' + ICON_MAP[type] + '"></i></div>',
+      className: '', iconSize: [30,30], iconAnchor: [15,15], popupAnchor: [0,-16]
     });
   }
 
-  /* -------- Capas -------- */
-  var layers = { bike: L.layerGroup(), tram: L.layerGroup() };
+  /* -------- Capas (incluye bus) -------- */
+  var layers = { bike: L.layerGroup(), tram: L.layerGroup(), bus: L.layerGroup() };
 
-  /* -------- Popups -------- */
+  /* -------- Popups (incluye route_ref para micros) -------- */
   function popupHtml(item){
     var t = item.tags || {};
-    var isBike = item.type === 'bike';
+    var type = item.type;
     var rows = [];
     var addr = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(' ').trim();
     if (addr) rows.push(['Dirección', esc(addr)]);
     if (t.operator) rows.push(['Operador', esc(t.operator)]);
     if (t.network) rows.push(['Red', esc(t.network)]);
-    if (t.capacity) rows.push(['Capacidad', esc(t.capacity) + (isBike ? ' bicis' : ' andenes')]);
+    if (type === 'bike' && t.capacity) rows.push(['Capacidad', esc(t.capacity) + ' bicis']);
+    if (type === 'tram' && t.capacity) rows.push(['Capacidad', esc(t.capacity) + ' andenes']);
+    if (type === 'bus' && t.route_ref) rows.push(['Líneas', esc(t.route_ref)]);
     if (t.opening_hours) rows.push(['Horario', esc(t.opening_hours)]);
     if (state.userLatLng) {
       var d = map.distance([item.lat, item.lon], state.userLatLng);
@@ -402,8 +423,8 @@ function boot(){
     }).join('');
     var dirUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + item.lat + ',' + item.lon;
     return '<div class="popup">' +
-      '<div class="popup-head popup-head--' + (isBike ? 'bike' : 'tram') + '">' +
-        '<i class="fa-solid ' + (isBike ? 'fa-bicycle' : 'fa-train-tram') + '"></i>' +
+      '<div class="popup-head popup-head--' + type + '">' +
+        '<i class="fa-solid ' + ICON_MAP[type] + '"></i>' +
         '<span>' + esc(item.name) + '</span>' +
       '</div>' +
       '<div class="popup-body">' + body + '</div>' +
@@ -419,9 +440,8 @@ function boot(){
   function render(items){
     state.items = items;
     try {
-      layers.bike.clearLayers();
-      layers.tram.clearLayers();
-      var cb = 0, ct = 0;
+      Object.keys(layers).forEach(function(k){ layers[k].clearLayers(); });
+      var counts = { bike: 0, tram: 0, bus: 0 };
 
       items.forEach(function(item){
         var marker = L.marker([item.lat, item.lon], {
@@ -430,11 +450,10 @@ function boot(){
         });
         marker.bindPopup(function(){ return popupHtml(item); }, { maxWidth: 300 });
         layers[item.type].addLayer(marker);
-        if (item.type === 'bike') cb++; else ct++;
+        counts[item.type] = (counts[item.type] || 0) + 1;
       });
 
-      countBike.textContent = cb;
-      countTram.textContent = ct;
+      Object.keys(countEls).forEach(function(k){ countEls[k].textContent = counts[k] || 0; });
       applyFilters();
     } catch(e) {
       console.error('Error en render:', e);
@@ -443,18 +462,23 @@ function boot(){
   }
 
   function applyFilters(){
-    if (state.filters.bike) { if (!map.hasLayer(layers.bike)) map.addLayer(layers.bike); }
-    else { if (map.hasLayer(layers.bike)) map.removeLayer(layers.bike); }
-    if (state.filters.tram) { if (!map.hasLayer(layers.tram)) map.addLayer(layers.tram); }
-    else { if (map.hasLayer(layers.tram)) map.removeLayer(layers.tram); }
+    Object.keys(layers).forEach(function(type){
+      if (state.filters[type]) {
+        if (!map.hasLayer(layers[type])) map.addLayer(layers[type]);
+      } else {
+        if (map.hasLayer(layers[type])) map.removeLayer(layers[type]);
+      }
+    });
   }
 
-  /* -------- Overpass API -------- */
+  /* -------- Overpass API (incluye bus) -------- */
   function buildQuery(){
     return '[out:json][timeout:25];' +
       '(' +
       'nwr["amenity"="bicycle_rental"](' + CFG.bbox + ');' +
       'nwr["railway"="tram_stop"](' + CFG.bbox + ');' +
+      'nwr["highway"="bus_stop"](' + CFG.bbox + ');' +
+      'nwr["public_transport"="platform"]["bus"="yes"](' + CFG.bbox + ');' +
       ');' +
       'out center;';
   }
@@ -463,7 +487,6 @@ function boot(){
     return new Promise(function(resolve, reject){
       var ctrl = new AbortController();
       var timer = setTimeout(function(){ ctrl.abort(); }, CFG.timeoutMs);
-
       fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
@@ -479,17 +502,14 @@ function boot(){
         if (!json || !Array.isArray(json.elements)) throw new Error('JSON inválido');
         resolve(json.elements);
       })
-      .catch(function(err){
-        clearTimeout(timer);
-        reject(err);
-      });
+      .catch(function(err){ clearTimeout(timer); reject(err); });
     });
   }
 
   function fetchOverpass(query){
     var i = 0;
     function next(){
-      if (i >= CFG.endpoints.length) return Promise.reject(new Error('Sin endpoints disponibles'));
+      if (i >= CFG.endpoints.length) return Promise.reject(new Error('Sin endpoints'));
       var ep = CFG.endpoints[i++];
       return tryEndpoint(ep, query).catch(function(err){
         console.warn('Falló', ep, err.message);
@@ -499,6 +519,7 @@ function boot(){
     return next();
   }
 
+  /* -------- Normalización (incluye bus) -------- */
   function normalize(elements){
     var items = [], seen = {};
     elements.forEach(function(el){
@@ -509,13 +530,19 @@ function boot(){
       var type = null;
       if (tags.amenity === 'bicycle_rental') type = 'bike';
       else if (tags.railway === 'tram_stop') type = 'tram';
+      else if (tags.highway === 'bus_stop') type = 'bus';
+      else if (tags.public_transport === 'platform' && tags.bus === 'yes') type = 'bus';
       if (!type) return;
+
       var id = el.type + '/' + el.id;
       if (seen[id]) return;
       seen[id] = true;
+
+      var defaultNames = { bike:'Estación de bicicletas', tram:'Parada de tranvía', bus:'Parada de colectivo' };
+
       items.push({
         id: id, type: type, lat: lat, lon: lon, tags: tags,
-        name: tags.name || (type === 'bike' ? 'Estación de bicicletas' : 'Parada de tranvía')
+        name: tags.name || defaultNames[type]
       });
     });
     return items;
@@ -534,8 +561,7 @@ function boot(){
   }
 
   function writeCache(items){
-    try { store.set(CFG.cacheKey, JSON.stringify({ ts: Date.now(), items: items })); }
-    catch(e){}
+    try { store.set(CFG.cacheKey, JSON.stringify({ ts: Date.now(), items: items })); } catch(e){}
   }
 
   function loadData(force){
@@ -544,13 +570,11 @@ function boot(){
     refreshBtn.classList.add('is-loading');
     refreshBtn.disabled = true;
 
-    /* 1) Pintamos semilla al instante */
     if (state.items.length === 0) {
       render(SEED);
       setStatus('', 'Mostrando ' + SEED.length + ' puntos de ejemplo · consultando API…');
     }
 
-    /* 2) Caché */
     if (!force) {
       var cached = readCache();
       if (cached) {
@@ -559,7 +583,6 @@ function boot(){
       }
     }
 
-    /* 3) API real */
     fetchOverpass(buildQuery())
       .then(function(elements){
         var items = normalize(elements);
@@ -569,9 +592,9 @@ function boot(){
         }
         render(items);
         writeCache(items);
-        var b = items.filter(function(i){ return i.type === 'bike'; }).length;
-        var t = items.filter(function(i){ return i.type === 'tram'; }).length;
-        setStatus('ok', 'Reales: ' + b + ' bicis · ' + t + ' tranvías');
+        var c = { bike:0, tram:0, bus:0 };
+        items.forEach(function(i){ c[i.type] = (c[i.type] || 0) + 1; });
+        setStatus('ok', 'Reales: ' + c.bike + ' bicis · ' + c.tram + ' tranvías · ' + c.bus + ' micros');
       })
       .catch(function(err){
         console.warn('API falló:', err.message);
@@ -586,10 +609,7 @@ function boot(){
 
   /* -------- Geolocalización -------- */
   function locateUser(){
-    if (!('geolocation' in navigator)) {
-      setStatus('err', 'Geolocalización no soportada');
-      return;
-    }
+    if (!('geolocation' in navigator)) { setStatus('err', 'Geolocalización no soportada'); return; }
     locateBtn.classList.add('is-locating');
     map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true, timeout: 12000 });
   }
@@ -619,7 +639,7 @@ function boot(){
     setStatus('err', e.message || 'No se pudo obtener ubicación');
   });
 
-  /* -------- Eventos UI -------- */
+  /* -------- UI -------- */
   refreshBtn.addEventListener('click', function(){ loadData(true); });
   locateBtn.addEventListener('click', locateUser);
 
@@ -643,24 +663,18 @@ function boot(){
   }
 }
 
-/* Arranca cuando Leaflet esté listo */
 if (window.__leafletLoaded) {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
+  } else { boot(); }
 } else {
-  // Si Leaflet tarda, esperamos un poco
   var attempts = 0;
   var waitLeaflet = setInterval(function(){
     attempts++;
-    if (window.__leafletLoaded) {
+    if (window.__leafletLoaded) { clearInterval(waitLeaflet); boot(); }
+    else if (attempts > 50) {
       clearInterval(waitLeaflet);
-      boot();
-    } else if (attempts > 50) {
-      clearInterval(waitLeaflet);
-      showFatal('Timeout esperando Leaflet. Verificá tu conexión a Internet.');
+      showFatal('Timeout esperando Leaflet. Verificá tu conexión.');
     }
   }, 100);
 }
