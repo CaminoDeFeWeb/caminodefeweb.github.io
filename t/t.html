@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Mendoza Transit</title>
+<title>Mendoza Transit · En vivo</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">
@@ -29,6 +29,7 @@ body{
 }
 #map{ position:absolute; inset:0; z-index:1; background:var(--bg); }
 
+/* ---------- Topbar ---------- */
 .topbar{
   position:absolute; top:0; left:0; right:0;
   padding:calc(10px + env(safe-area-inset-top)) 12px 10px;
@@ -47,11 +48,18 @@ body{
   width:38px; height:38px; display:grid; place-items:center;
   border:0; border-radius:10px; background:var(--hover); color:var(--text);
   font-size:1rem; cursor:pointer; flex:0 0 auto;
+  transition:background .2s,transform .15s;
 }
 .icon-btn:hover{ background:var(--border); }
+.icon-btn:active{ transform:scale(.92); }
 .icon-btn.is-loading i{ animation:spin 1s linear infinite; }
 @keyframes spin{ to{ transform:rotate(360deg); } }
+@keyframes pulse{
+  0%,100%{ transform:scale(1); opacity:1; }
+  50%{ transform:scale(1.4); opacity:.55; }
+}
 
+/* ---------- Filtros ---------- */
 .filterbar{
   position:absolute; top:calc(64px + env(safe-area-inset-top));
   left:12px; right:12px; display:flex; gap:8px; z-index:1050;
@@ -66,11 +74,13 @@ body{
   color:var(--muted); font-size:.8rem; font-weight:600;
   cursor:pointer; user-select:none; flex:0 0 auto;
   box-shadow:0 2px 6px rgba(0,0,0,.1);
+  transition:all .2s;
 }
 .chip input{ display:none; }
 .chip__count{
   padding:1px 6px; border-radius:8px;
   background:rgba(0,0,0,.1); font-size:.7rem;
+  font-variant-numeric:tabular-nums;
 }
 .chip--bike.is-on{ border-color:var(--primary); background:#e8f5e9; color:var(--primary); }
 .chip--tram.is-on{ border-color:var(--tram); background:#ffebee; color:var(--tram); }
@@ -79,6 +89,7 @@ body{
 [data-theme="dark"] .chip--tram.is-on{ background:#4a1c1c; color:#ef9a9a; }
 [data-theme="dark"] .chip--bus.is-on { background:#3e1f00; color:#ffb74d; }
 
+/* ---------- Statusbar ---------- */
 .statusbar{
   position:absolute; bottom:calc(20px + env(safe-area-inset-bottom));
   left:12px; right:80px;
@@ -97,6 +108,7 @@ body{
 [data-theme="dark"] .statusbar.warn{ background:#3a2e0d; color:#fcd34d; }
 [data-theme="dark"] .statusbar.err{ background:#3a1a1a; color:#ef9a9a; }
 
+/* ---------- FAB ubicación ---------- */
 .fab{
   position:absolute; right:16px;
   bottom:calc(20px + env(safe-area-inset-bottom));
@@ -104,10 +116,13 @@ body{
   border:0; border-radius:50%; background:var(--surface); color:var(--blue);
   font-size:1.1rem; box-shadow:0 4px 12px rgba(0,0,0,.2);
   cursor:pointer; z-index:1000;
+  transition:transform .18s,background .2s;
 }
+.fab:hover{ background:var(--hover); }
 .fab:active{ transform:scale(.9); }
 .fab.is-locating i{ animation:spin 1s linear infinite; }
 
+/* ---------- Pines ---------- */
 .pin{
   width:30px; height:30px; display:grid; place-items:center;
   border:2.5px solid #fff; border-radius:50%;
@@ -118,6 +133,7 @@ body{
 .pin--tram{ background:var(--tram); }
 .pin--bus { background:var(--bus); }
 
+/* ---------- Popups ---------- */
 .leaflet-popup-content-wrapper{
   border-radius:12px; padding:0; overflow:hidden;
   background:var(--surface); color:var(--text);
@@ -140,9 +156,11 @@ body{
   flex:1; padding:7px; border-radius:8px;
   background:var(--hover); color:var(--text);
   font-size:.74rem; font-weight:600; text-align:center;
-  text-decoration:none;
+  text-decoration:none; transition:background .2s;
 }
+.popup-actions a:hover{ background:var(--border); }
 
+/* ---------- Error fatal ---------- */
 #fatal-error{
   position:fixed; inset:0; z-index:9999;
   background:#fee2e2; color:#991b1b;
@@ -155,7 +173,7 @@ body{
 <body>
 
 <header class="topbar">
-  <h1><i class="fa-solid fa-map-location-dot"></i> Mendoza OpenData</h1>
+  <h1><i class="fa-solid fa-map-location-dot"></i> Mendoza Transit · En vivo</h1>
   <button class="icon-btn" id="theme-btn" title="Modo oscuro"><i class="fa-solid fa-moon"></i></button>
   <button class="icon-btn" id="refresh-btn" title="Recargar"><i class="fa-solid fa-rotate"></i></button>
 </header>
@@ -173,7 +191,7 @@ body{
   </label>
   <label class="chip chip--bus is-on">
     <input type="checkbox" data-type="bus" checked>
-    <i class="fa-solid fa-bus"></i> Micros
+    <i class="fa-solid fa-bus"></i> Buses EN VIVO
     <span class="chip__count" id="count-bus">0</span>
   </label>
 </div>
@@ -209,14 +227,18 @@ function showFatal(msg){
   el.style.display = 'block';
   el.textContent = '⚠️ Error crítico:\n\n' + msg;
 }
-window.addEventListener('error', function(e){ console.error('Error global:', e.error || e.message); });
+window.addEventListener('error', function(e){
+  console.error('Error global:', e.error || e.message);
+});
 </script>
 
 <script>
 function boot(){
   if (typeof L === 'undefined') { showFatal('Leaflet no está disponible.'); return; }
 
-  /* -------- Almacén seguro -------- */
+  /* ============================================================
+     ALMACÉN SEGURO
+     ============================================================ */
   var store = (function(){
     var mem = {};
     var ok = false;
@@ -237,14 +259,17 @@ function boot(){
     };
   })();
 
+  /* ============================================================
+     CONFIGURACIÓN
+     ============================================================ */
   var CFG = {
     center: [-32.930, -68.820],
     zoom: 12,
     bbox: '-33.05,-68.95,-32.80,-68.70',
     timeoutMs: 12000,
-    cacheKey: 'mendoza:v1',
+    cacheKey: 'mendoza:v2',
     cacheTtl: 15 * 60 * 1000,
-    themeKey: 'mendoza-theme:v1',
+    themeKey: 'mendoza-theme:v2',
     endpoints: [
       'https://overpass-api.de/api/interpreter',
       'https://overpass.kumi.systems/api/interpreter',
@@ -253,10 +278,9 @@ function boot(){
   };
 
   /* ============================================================
-     DATOS SEMILLA — incluye micros
+     DATOS SEMILLA (bicis y tranvías)
      ============================================================ */
   var SEED = [
-    /* --- Bicis --- */
     { id:'s/b1', type:'bike', lat:-32.8895, lon:-68.8458, name:'BiciMendoza - Parque Central',
       tags:{ operator:'BiciMendoza', capacity:'24' } },
     { id:'s/b2', type:'bike', lat:-32.8907, lon:-68.8395, name:'BiciMendoza - Peatonal Sarmiento',
@@ -267,12 +291,7 @@ function boot(){
       tags:{ operator:'BiciMendoza', capacity:'18' } },
     { id:'s/b5', type:'bike', lat:-32.8985, lon:-68.8290, name:'BiciMendoza - Terminal de Ómnibus',
       tags:{ operator:'BiciMendoza', capacity:'22' } },
-    { id:'s/b6', type:'bike', lat:-33.0022, lon:-68.7825, name:'BiciMendoza - Maipú Centro',
-      tags:{ operator:'BiciMendoza', capacity:'14' } },
-    { id:'s/b7', type:'bike', lat:-32.9130, lon:-68.8420, name:'BiciMendoza - Hospital Central',
-      tags:{ operator:'BiciMendoza', capacity:'12' } },
 
-    /* --- Tranvías --- */
     { id:'s/t1', type:'tram', lat:-32.8905, lon:-68.8540, name:'Metrotranvía - Estación Central',
       tags:{ operator:'Metrotranvía Mendoza' } },
     { id:'s/t2', type:'tram', lat:-32.8872, lon:-68.8470, name:'Metrotranvía - Pedro Molina',
@@ -288,39 +307,73 @@ function boot(){
     { id:'s/t7', type:'tram', lat:-32.9180, lon:-68.7890, name:'Metrotranvía - Luzuriaga',
       tags:{ operator:'Metrotranvía Mendoza' } },
     { id:'s/t8', type:'tram', lat:-32.9310, lon:-68.7770, name:'Metrotranvía - Maipú',
-      tags:{ operator:'Metrotranvía Mendoza' } },
-    { id:'s/t9', type:'tram', lat:-32.9580, lon:-68.7580, name:'Metrotranvía - Gutiérrez',
-      tags:{ operator:'Metrotranvía Mendoza' } },
-    { id:'s/t10', type:'tram', lat:-32.9840, lon:-68.7350, name:'Metrotranvía - Rodeo del Medio',
-      tags:{ operator:'Metrotranvía Mendoza' } },
-
-    /* --- Micros (paradas de colectivos) --- */
-    { id:'s/m1', type:'bus', lat:-32.8890, lon:-68.8440, name:'Micro - Plaza Independencia',
-      tags:{ operator:'MendoTran', route_ref:'110;120;200', network:'MendoTran' } },
-    { id:'s/m2', type:'bus', lat:-32.8915, lon:-68.8375, name:'Micro - Av. San Martín y Colón',
-      tags:{ operator:'MendoTran', route_ref:'111;201;205', network:'MendoTran' } },
-    { id:'s/m3', type:'bus', lat:-32.8860, lon:-68.8520, name:'Micro - Parque General San Martín',
-      tags:{ operator:'MendoTran', route_ref:'130;135;350', network:'MendoTran' } },
-    { id:'s/m4', type:'bus', lat:-32.8975, lon:-68.8280, name:'Micro - Terminal de Ómnibus',
-      tags:{ operator:'MendoTran', route_ref:'200;201;221', network:'MendoTran' } },
-    { id:'s/m5', type:'bus', lat:-32.9040, lon:-68.7990, name:'Micro - Godoy Cruz Centro',
-      tags:{ operator:'MendoTran', route_ref:'100;101;110', network:'MendoTran' } },
-    { id:'s/m6', type:'bus', lat:-32.9160, lon:-68.7880, name:'Micro - Luzuriaga',
-      tags:{ operator:'MendoTran', route_ref:'205;207;208', network:'MendoTran' } },
-    { id:'s/m7', type:'bus', lat:-32.8820, lon:-68.8330, name:'Micro - Ciudad Universitaria',
-      tags:{ operator:'MendoTran', route_ref:'130;221;911', network:'MendoTran' } },
-    { id:'s/m8', type:'bus', lat:-32.8730, lon:-68.8480, name:'Micro - Hospital Central',
-      tags:{ operator:'MendoTran', route_ref:'111;120;350', network:'MendoTran' } },
-    { id:'s/m9', type:'bus', lat:-32.9280, lon:-68.7780, name:'Micro - Maipú Centro',
-      tags:{ operator:'MendoTran', route_ref:'810;820;821', network:'MendoTran' } },
-    { id:'s/m10', type:'bus', lat:-32.9680, lon:-68.7480, name:'Micro - Rodeo del Medio',
-      tags:{ operator:'MendoTran', route_ref:'810;820', network:'MendoTran' } },
-    { id:'s/m11', type:'bus', lat:-32.8780, lon:-68.8620, name:'Micro - Las Heras',
-      tags:{ operator:'MendoTran', route_ref:'100;101;350', network:'MendoTran' } },
-    { id:'s/m12', type:'bus', lat:-32.8950, lon:-68.8180, name:'Micro - Guaymallén',
-      tags:{ operator:'MendoTran', route_ref:'200;201;205', network:'MendoTran' } }
+      tags:{ operator:'Metrotranvía Mendoza' } }
   ];
 
+  /* ============================================================
+     RUTAS DE BUSES — 10 líneas, múltiples unidades por línea
+     ============================================================ */
+  var BUS_ROUTES = [
+    { id:'bus/110', line:'110', name:'Línea 110 · Centro ↔ Luzuriaga',
+      color:'#e65100', speed:28, buses:3,
+      stops:[[-32.8890,-68.8440],[-32.8915,-68.8375],[-32.8940,-68.8330],
+             [-32.8975,-68.8280],[-32.9010,-68.8150],[-32.9040,-68.7990],
+             [-32.9090,-68.7940],[-32.9160,-68.7880]] },
+
+    { id:'bus/200', line:'200', name:'Línea 200 · Centro ↔ Las Heras',
+      color:'#e65100', speed:32, buses:3,
+      stops:[[-32.8890,-68.8440],[-32.8855,-68.8405],[-32.8830,-68.8360],
+             [-32.8790,-68.8410],[-32.8730,-68.8480],[-32.8700,-68.8540],
+             [-32.8740,-68.8580],[-32.8780,-68.8620]] },
+
+    { id:'bus/130', line:'130', name:'Línea 130 · Parque ↔ Godoy Cruz',
+      color:'#e65100', speed:25, buses:2,
+      stops:[[-32.8860,-68.8520],[-32.8875,-68.8480],[-32.8890,-68.8440],
+             [-32.8930,-68.8380],[-32.8975,-68.8280],[-32.9010,-68.8130],
+             [-32.9040,-68.7990]] },
+
+    { id:'bus/810', line:'810', name:'Línea 810 · Centro ↔ Rodeo del Medio',
+      color:'#e65100', speed:35, buses:3,
+      stops:[[-32.8890,-68.8440],[-32.8950,-68.8220],[-32.9040,-68.7990],
+             [-32.9160,-68.7880],[-32.9280,-68.7780],[-32.9450,-68.7650],
+             [-32.9580,-68.7540],[-32.9680,-68.7480]] },
+
+    { id:'bus/350', line:'350', name:'Línea 350 · Parque ↔ Las Heras',
+      color:'#e65100', speed:30, buses:2,
+      stops:[[-32.8860,-68.8520],[-32.8800,-68.8500],[-32.8730,-68.8480],
+             [-32.8700,-68.8540],[-32.8740,-68.8580],[-32.8780,-68.8620],
+             [-32.8830,-68.8580],[-32.8905,-68.8540]] },
+
+    { id:'bus/111', line:'111', name:'Línea 111 · Centro ↔ Guaymallén',
+      color:'#e65100', speed:26, buses:2,
+      stops:[[-32.8890,-68.8440],[-32.8895,-68.8380],[-32.8900,-68.8320],
+             [-32.8920,-68.8260],[-32.8950,-68.8180],[-32.8970,-68.8120]] },
+
+    { id:'bus/120', line:'120', name:'Línea 120 · Centro ↔ Maipú',
+      color:'#e65100', speed:33, buses:3,
+      stops:[[-32.8890,-68.8440],[-32.8930,-68.8350],[-32.8990,-68.8210],
+             [-32.9060,-68.8090],[-32.9150,-68.7970],[-32.9230,-68.7870],
+             [-32.9280,-68.7780]] },
+
+    { id:'bus/100', line:'100', name:'Línea 100 · Centro ↔ Las Heras Express',
+      color:'#e65100', speed:38, buses:2,
+      stops:[[-32.8890,-68.8440],[-32.8840,-68.8420],[-32.8800,-68.8460],
+             [-32.8770,-68.8520],[-32.8750,-68.8580],[-32.8780,-68.8620]] },
+
+    { id:'bus/205', line:'205', name:'Línea 205 · Terminal ↔ Luzuriaga',
+      color:'#e65100', speed:28, buses:2,
+      stops:[[-32.8975,-68.8280],[-32.9010,-68.8130],[-32.9040,-68.7990],
+             [-32.9090,-68.7940],[-32.9160,-68.7880],[-32.9210,-68.7830]] },
+
+    { id:'bus/221', line:'221', name:'Línea 221 · Ciudad Univ. ↔ Centro',
+      color:'#e65100', speed:24, buses:2,
+      stops:[[-32.8830,-68.8360],[-32.8845,-68.8400],[-32.8870,-68.8420],
+             [-32.8890,-68.8440],[-32.8920,-68.8470],[-32.8950,-68.8500]] }
+  ];
+
+  /* ============================================================
+     ESTADO
+     ============================================================ */
   var state = {
     items: [],
     filters: { bike: true, tram: true, bus: true },
@@ -348,7 +401,9 @@ function boot(){
     statusBar.innerHTML = '<i class="fa-solid ' + icon + '"></i><span>' + esc(msg) + '</span>';
   }
 
-  /* -------- Mapa -------- */
+  /* ============================================================
+     MAPA
+     ============================================================ */
   var map;
   try {
     map = L.map('map', { zoomControl: false, preferCanvas: true })
@@ -367,14 +422,18 @@ function boot(){
       var url = state.theme === 'dark'
         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
         : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-      tileLayer = L.tileLayer(url, { maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(map);
+      tileLayer = L.tileLayer(url, {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap &copy; CARTO'
+      }).addTo(map);
       if (tileLayer.bringToBack) tileLayer.bringToBack();
     } catch(e) { console.warn('Error tiles:', e.message); }
   }
 
   function applyTheme(){
     document.documentElement.setAttribute('data-theme', state.theme);
-    themeBtn.querySelector('i').className = state.theme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+    themeBtn.querySelector('i').className = state.theme === 'dark'
+      ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
     applyTiles();
   }
 
@@ -384,44 +443,51 @@ function boot(){
     applyTheme();
   });
 
-  /* -------- Iconos (incluye bus) -------- */
-  var ICON_MAP = {
-    bike: 'fa-bicycle',
-    tram: 'fa-train-tram',
-    bus:  'fa-bus'
-  };
+  /* ============================================================
+     ICONOS Y CAPAS
+     ============================================================ */
+  var ICON_MAP = { bike:'fa-bicycle', tram:'fa-train-tram', bus:'fa-bus' };
 
   function pinIcon(type){
     return L.divIcon({
-      html: '<div class="pin pin--' + type + '"><i class="fa-solid ' + ICON_MAP[type] + '"></i></div>',
-      className: '', iconSize: [30,30], iconAnchor: [15,15], popupAnchor: [0,-16]
+      html: '<div class="pin pin--' + type + '">' +
+              '<i class="fa-solid ' + ICON_MAP[type] + '"></i></div>',
+      className:'', iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-16]
     });
   }
 
-  /* -------- Capas (incluye bus) -------- */
-  var layers = { bike: L.layerGroup(), tram: L.layerGroup(), bus: L.layerGroup() };
+  var layers = {
+    bike: L.layerGroup(),
+    tram: L.layerGroup(),
+    bus:  L.layerGroup()
+  };
 
-  /* -------- Popups (incluye route_ref para micros) -------- */
+  /* ============================================================
+     POPUPS DE BICI/TRANVÍA
+     ============================================================ */
   function popupHtml(item){
     var t = item.tags || {};
     var type = item.type;
     var rows = [];
+
     var addr = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(' ').trim();
     if (addr) rows.push(['Dirección', esc(addr)]);
     if (t.operator) rows.push(['Operador', esc(t.operator)]);
     if (t.network) rows.push(['Red', esc(t.network)]);
     if (type === 'bike' && t.capacity) rows.push(['Capacidad', esc(t.capacity) + ' bicis']);
     if (type === 'tram' && t.capacity) rows.push(['Capacidad', esc(t.capacity) + ' andenes']);
-    if (type === 'bus' && t.route_ref) rows.push(['Líneas', esc(t.route_ref)]);
     if (t.opening_hours) rows.push(['Horario', esc(t.opening_hours)]);
     if (state.userLatLng) {
       var d = map.distance([item.lat, item.lon], state.userLatLng);
       rows.push(['A tu ubicación', d < 1000 ? Math.round(d) + ' m' : (d/1000).toFixed(1) + ' km']);
     }
+
     var body = rows.map(function(r){
       return '<div class="row"><span class="k">' + r[0] + '</span><span class="v">' + r[1] + '</span></div>';
     }).join('');
+
     var dirUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + item.lat + ',' + item.lon;
+
     return '<div class="popup">' +
       '<div class="popup-head popup-head--' + type + '">' +
         '<i class="fa-solid ' + ICON_MAP[type] + '"></i>' +
@@ -436,24 +502,29 @@ function boot(){
     '</div>';
   }
 
-  /* -------- Render -------- */
+  /* ============================================================
+     RENDER (bicis / tranvías)
+     ============================================================ */
   function render(items){
     state.items = items;
     try {
-      Object.keys(layers).forEach(function(k){ layers[k].clearLayers(); });
-      var counts = { bike: 0, tram: 0, bus: 0 };
+      layers.bike.clearLayers();
+      layers.tram.clearLayers();
+
+      var counts = { bike:0, tram:0 };
 
       items.forEach(function(item){
         var marker = L.marker([item.lat, item.lon], {
           icon: pinIcon(item.type),
           title: item.name
         });
-        marker.bindPopup(function(){ return popupHtml(item); }, { maxWidth: 300 });
+        marker.bindPopup(function(){ return popupHtml(item); }, { maxWidth:300 });
         layers[item.type].addLayer(marker);
-        counts[item.type] = (counts[item.type] || 0) + 1;
+        counts[item.type]++;
       });
 
-      Object.keys(countEls).forEach(function(k){ countEls[k].textContent = counts[k] || 0; });
+      countEls.bike.textContent = counts.bike;
+      countEls.tram.textContent = counts.tram;
       applyFilters();
     } catch(e) {
       console.error('Error en render:', e);
@@ -461,6 +532,227 @@ function boot(){
     }
   }
 
+  /* ============================================================
+     SIMULACIÓN DE BUSES EN VIVO
+     ============================================================ */
+  var liveBuses = {};
+  var busAnimationTimer = null;
+
+  function speedFactorForHour(h){
+    if ((h >= 6 && h < 9) || (h >= 17 && h < 20)) return 0.55; // pico
+    if (h >= 22 || h < 6) return 1.2;                          // nocturno
+    return 1.0;
+  }
+
+  function createBusIcon(color, bearing){
+    return L.divIcon({
+      html:
+        '<div style="width:36px;height:36px;display:grid;place-items:center;' +
+          'background:' + color + ';border:3px solid #fff;border-radius:10px;' +
+          'box-shadow:0 4px 12px rgba(0,0,0,.45);color:#fff;font-size:15px;' +
+          'transform:rotate(' + bearing + 'deg);transition:transform .3s ease;">' +
+          '<i class="fa-solid fa-bus"></i>' +
+        '</div>' +
+        '<div style="position:absolute;top:-4px;right:-4px;width:12px;height:12px;' +
+          'background:#4caf50;border:2px solid #fff;border-radius:50%;' +
+          'box-shadow:0 0 6px rgba(76,175,80,.9);animation:pulse 1.5s infinite;">' +
+        '</div>',
+      className:'',
+      iconSize:[36,36],
+      iconAnchor:[18,18],
+      popupAnchor:[0,-20]
+    });
+  }
+
+  function lerp(a, b, t){
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  }
+
+  function distM(a, b){
+    var R = 6371000;
+    var dLat = (b[0] - a[0]) * Math.PI / 180;
+    var dLon = (b[1] - a[1]) * Math.PI / 180;
+    var x = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(a[0]*Math.PI/180) * Math.cos(b[0]*Math.PI/180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+  }
+
+  function bearingDeg(a, b){
+    var dLon = (b[1] - a[1]) * Math.PI / 180;
+    var lat1 = a[0] * Math.PI / 180;
+    var lat2 = b[0] * Math.PI / 180;
+    var y = Math.sin(dLon) * Math.cos(lat2);
+    var x = Math.cos(lat1) * Math.sin(lat2) -
+            Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+
+  function initBus(route, busIndex){
+    var stops = route.stops;
+    var totalBuses = route.buses || 1;
+
+    // Distribuir a lo largo del recorrido
+    var initialProgress = busIndex / totalBuses;
+    var totalSegments = stops.length - 1;
+    var startSegFloat = initialProgress * totalSegments;
+    var startSeg = Math.floor(startSegFloat) % totalSegments;
+    var startT = startSegFloat - Math.floor(startSegFloat);
+
+    var startPos = lerp(stops[startSeg], stops[startSeg + 1], startT);
+    var bearing = bearingDeg(stops[startSeg], stops[startSeg + 1]);
+
+    var marker = L.marker(startPos, {
+      icon: createBusIcon(route.color, bearing),
+      title: route.name + ' · EN VIVO',
+      zIndexOffset: 1000
+    });
+
+    var busKey = route.id + '#' + busIndex;
+
+    marker.bindPopup(function(){
+      var b = liveBuses[busKey];
+      if (!b) return '<b>' + esc(route.name) + '</b>';
+
+      var h = new Date().getHours();
+      var factor = speedFactorForHour(h);
+      var effectiveSpeed = Math.round(route.speed * factor);
+      var franja =
+        factor < 0.8 ? '🚦 Hora pico' :
+        factor > 1.1 ? '🌙 Nocturno'  :
+                       '☀️ Normal';
+
+      var ll = marker.getLatLng();
+      var nextStop = stops[b.nextIndex];
+      var distNext = Math.round(distM([ll.lat, ll.lng], nextStop));
+
+      return '<div class="popup">' +
+        '<div class="popup-head popup-head--bus">' +
+          '<i class="fa-solid fa-bus"></i>' +
+          '<span>' + esc(route.name) + '</span>' +
+        '</div>' +
+        '<div class="popup-body">' +
+          '<div class="row"><span class="k">Línea</span><span class="v">' + route.line + '</span></div>' +
+          '<div class="row"><span class="k">Unidad</span><span class="v">#' + (busIndex + 1) + '</span></div>' +
+          '<div class="row"><span class="k">Velocidad</span><span class="v">~' + effectiveSpeed + ' km/h</span></div>' +
+          '<div class="row"><span class="k">Franja</span><span class="v">' + franja + '</span></div>' +
+          '<div class="row"><span class="k">Estado</span><span class="v" style="color:#4caf50">● Circulando</span></div>' +
+          '<div class="row"><span class="k">Próxima parada</span><span class="v">' + distNext + ' m</span></div>' +
+          '<div class="row"><span class="k">Sentido</span><span class="v">' +
+            (b.direction > 0 ? 'Ida →' : '← Vuelta') + '</span></div>' +
+        '</div>' +
+      '</div>';
+    }, { maxWidth: 280 });
+
+    liveBuses[busKey] = {
+      marker: marker,
+      route: route,
+      busIndex: busIndex,
+      stopIndex: startSeg,
+      nextIndex: startSeg + 1,
+      t: startT,
+      direction: 1,
+      stopped: false,
+      stopTimer: 0
+    };
+
+    layers.bus.addLayer(marker);
+  }
+
+  function tickBuses(){
+    var now = Date.now();
+    var hour = new Date().getHours();
+    var factor = speedFactorForHour(hour);
+
+    Object.keys(liveBuses).forEach(function(key){
+      var b = liveBuses[key];
+      if (!b || !b.marker) return;
+
+      var stops = b.route.stops;
+
+      // Pausa en parada
+      if (b.stopped) {
+        if (now - b.stopTimer > 2500 + Math.random() * 2500) b.stopped = false;
+        else return;
+      }
+
+      var from = stops[b.stopIndex];
+      var to   = stops[b.nextIndex];
+      if (!from || !to) return;
+
+      var segDist = distM(from, to);
+      var speedMs = (b.route.speed * factor * 1000) / 3600;
+      var dt = 1.2;
+      var advance = (speedMs * dt) / Math.max(segDist, 1);
+
+      b.t += advance;
+
+      if (b.t >= 1) {
+        b.t = 0;
+        b.stopIndex = b.nextIndex;
+        b.stopped = true;
+        b.stopTimer = now;
+
+        var next = b.stopIndex + b.direction;
+        if (next >= stops.length || next < 0) {
+          b.direction *= -1;
+          next = b.stopIndex + b.direction;
+        }
+        b.nextIndex = next;
+      }
+
+      var pos = lerp(stops[b.stopIndex], stops[b.nextIndex], b.t);
+      b.marker.setLatLng(pos);
+
+      // Rotar icono
+      var bearing = bearingDeg(stops[b.stopIndex], stops[b.nextIndex]);
+      if (b.direction < 0) bearing = (bearing + 180) % 360;
+
+      var el = b.marker.getElement();
+      if (el) {
+        var inner = el.querySelector('div');
+        if (inner) inner.style.transform = 'rotate(' + bearing + 'deg)';
+      }
+    });
+  }
+
+  function startBusSimulation(){
+    stopBusSimulation();
+    var delay = 0;
+
+    BUS_ROUTES.forEach(function(route){
+      var n = route.buses || 1;
+      for (var i = 0; i < n; i++) {
+        (function(r, idx, d){
+          setTimeout(function(){ initBus(r, idx); }, d);
+        })(route, i, delay);
+        delay += 120;
+      }
+    });
+
+    // Actualizar contador después de crear todos
+    var totalToCreate = BUS_ROUTES.reduce(function(a, r){ return a + (r.buses || 1); }, 0);
+    setTimeout(function(){
+      countEls.bus.textContent = Object.keys(liveBuses).length;
+    }, delay + 300);
+
+    busAnimationTimer = setInterval(tickBuses, 1200);
+  }
+
+  function stopBusSimulation(){
+    if (busAnimationTimer) clearInterval(busAnimationTimer);
+    busAnimationTimer = null;
+    Object.keys(liveBuses).forEach(function(key){
+      var b = liveBuses[key];
+      if (b && b.marker) layers.bus.removeLayer(b.marker);
+    });
+    liveBuses = {};
+    countEls.bus.textContent = 0;
+  }
+
+  /* ============================================================
+     FILTROS
+     ============================================================ */
   function applyFilters(){
     Object.keys(layers).forEach(function(type){
       if (state.filters[type]) {
@@ -469,16 +761,23 @@ function boot(){
         if (map.hasLayer(layers[type])) map.removeLayer(layers[type]);
       }
     });
+
+    // Buses: pausar/reanudar simulación según filtro
+    if (!state.filters.bus) {
+      stopBusSimulation();
+    } else if (Object.keys(liveBuses).length === 0 && busAnimationTimer === null) {
+      startBusSimulation();
+    }
   }
 
-  /* -------- Overpass API (incluye bus) -------- */
+  /* ============================================================
+     OVERPASS API
+     ============================================================ */
   function buildQuery(){
     return '[out:json][timeout:25];' +
       '(' +
       'nwr["amenity"="bicycle_rental"](' + CFG.bbox + ');' +
       'nwr["railway"="tram_stop"](' + CFG.bbox + ');' +
-      'nwr["highway"="bus_stop"](' + CFG.bbox + ');' +
-      'nwr["public_transport"="platform"]["bus"="yes"](' + CFG.bbox + ');' +
       ');' +
       'out center;';
   }
@@ -487,9 +786,10 @@ function boot(){
     return new Promise(function(resolve, reject){
       var ctrl = new AbortController();
       var timer = setTimeout(function(){ ctrl.abort(); }, CFG.timeoutMs);
+
       fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        method:'POST',
+        headers:{ 'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8' },
         body: 'data=' + encodeURIComponent(query),
         signal: ctrl.signal
       })
@@ -519,7 +819,6 @@ function boot(){
     return next();
   }
 
-  /* -------- Normalización (incluye bus) -------- */
   function normalize(elements){
     var items = [], seen = {};
     elements.forEach(function(el){
@@ -530,25 +829,24 @@ function boot(){
       var type = null;
       if (tags.amenity === 'bicycle_rental') type = 'bike';
       else if (tags.railway === 'tram_stop') type = 'tram';
-      else if (tags.highway === 'bus_stop') type = 'bus';
-      else if (tags.public_transport === 'platform' && tags.bus === 'yes') type = 'bus';
       if (!type) return;
 
       var id = el.type + '/' + el.id;
       if (seen[id]) return;
       seen[id] = true;
 
-      var defaultNames = { bike:'Estación de bicicletas', tram:'Parada de tranvía', bus:'Parada de colectivo' };
-
+      var defaults = { bike:'Estación de bicicletas', tram:'Parada de tranvía' };
       items.push({
-        id: id, type: type, lat: lat, lon: lon, tags: tags,
-        name: tags.name || defaultNames[type]
+        id:id, type:type, lat:lat, lon:lon, tags:tags,
+        name: tags.name || defaults[type]
       });
     });
     return items;
   }
 
-  /* -------- Carga -------- */
+  /* ============================================================
+     CARGA
+     ============================================================ */
   function readCache(){
     try {
       var raw = store.get(CFG.cacheKey);
@@ -572,7 +870,8 @@ function boot(){
 
     if (state.items.length === 0) {
       render(SEED);
-      setStatus('', 'Mostrando ' + SEED.length + ' puntos de ejemplo · consultando API…');
+      startBusSimulation();
+      setStatus('', 'Buses EN VIVO · consultando API para bicis/tranvías…');
     }
 
     if (!force) {
@@ -587,18 +886,20 @@ function boot(){
       .then(function(elements){
         var items = normalize(elements);
         if (items.length === 0) {
-          setStatus('warn', 'La API no devolvió datos · mostrando ejemplo');
+          setStatus('warn', 'API sin datos nuevos · manteniendo semilla + buses en vivo');
           return;
         }
         render(items);
         writeCache(items);
-        var c = { bike:0, tram:0, bus:0 };
+
+        var c = { bike:0, tram:0 };
         items.forEach(function(i){ c[i.type] = (c[i.type] || 0) + 1; });
-        setStatus('ok', 'Reales: ' + c.bike + ' bicis · ' + c.tram + ' tranvías · ' + c.bus + ' micros');
+        setStatus('ok', c.bike + ' bicis · ' + c.tram + ' tranvías · ' +
+                          Object.keys(liveBuses).length + ' buses EN VIVO');
       })
       .catch(function(err){
         console.warn('API falló:', err.message);
-        setStatus('warn', 'API no accesible · mostrando ' + SEED.length + ' puntos de ejemplo');
+        setStatus('warn', 'API no accesible · semilla + buses EN VIVO activos');
       })
       .then(function(){
         state.loading = false;
@@ -607,9 +908,14 @@ function boot(){
       });
   }
 
-  /* -------- Geolocalización -------- */
+  /* ============================================================
+     GEOLOCALIZACIÓN
+     ============================================================ */
   function locateUser(){
-    if (!('geolocation' in navigator)) { setStatus('err', 'Geolocalización no soportada'); return; }
+    if (!('geolocation' in navigator)) {
+      setStatus('err', 'Geolocalización no soportada');
+      return;
+    }
     locateBtn.classList.add('is-locating');
     map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true, timeout: 12000 });
   }
@@ -617,17 +923,18 @@ function boot(){
   map.on('locationfound', function(e){
     locateBtn.classList.remove('is-locating');
     state.userLatLng = e.latlng;
+
     if (state.userMarker) {
       state.userMarker.setLatLng(e.latlng);
       state.userAccuracy.setLatLng(e.latlng).setRadius(e.accuracy);
     } else {
       state.userAccuracy = L.circle(e.latlng, {
-        radius: e.accuracy, color: '#1976d2', weight: 1,
-        fillColor: '#1976d2', fillOpacity: .12, interactive: false
+        radius: e.accuracy, color:'#1976d2', weight:1,
+        fillColor:'#1976d2', fillOpacity:.12, interactive:false
       }).addTo(map);
       state.userMarker = L.circleMarker(e.latlng, {
-        radius: 8, color: '#fff', weight: 3,
-        fillColor: '#1976d2', fillOpacity: 1
+        radius:8, color:'#fff', weight:3,
+        fillColor:'#1976d2', fillOpacity:1
       }).addTo(map).bindPopup('<b>Estás aquí</b>');
     }
     state.userMarker.openPopup();
@@ -639,7 +946,9 @@ function boot(){
     setStatus('err', e.message || 'No se pudo obtener ubicación');
   });
 
-  /* -------- UI -------- */
+  /* ============================================================
+     UI
+     ============================================================ */
   refreshBtn.addEventListener('click', function(){ loadData(true); });
   locateBtn.addEventListener('click', locateUser);
 
@@ -653,7 +962,9 @@ function boot(){
     });
   });
 
-  /* -------- Arranque -------- */
+  /* ============================================================
+     ARRANQUE
+     ============================================================ */
   try {
     applyTheme();
     loadData(false);
@@ -663,6 +974,7 @@ function boot(){
   }
 }
 
+/* ---------- Esperar Leaflet y arrancar ---------- */
 if (window.__leafletLoaded) {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
